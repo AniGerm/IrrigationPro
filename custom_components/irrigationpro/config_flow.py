@@ -16,6 +16,10 @@ from .const import (
     CONF_HIGH_THRESHOLD,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
+    CONF_PUSHOVER_DEVICE,
+    CONF_PUSHOVER_ENABLED,
+    CONF_PUSHOVER_PRIORITY,
+    CONF_PUSHOVER_USER_KEY,
     CONF_RECHECK_TIME,
     CONF_SOLAR_RADIATION,
     CONF_SUNRISE_OFFSET,
@@ -38,6 +42,8 @@ from .const import (
     DEFAULT_CYCLES,
     DEFAULT_HIGH_THRESHOLD,
     DEFAULT_LOW_THRESHOLD,
+    DEFAULT_PUSHOVER_ENABLED,
+    DEFAULT_PUSHOVER_PRIORITY,
     DEFAULT_RECHECK_TIME,
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_SUNRISE_OFFSET,
@@ -345,6 +351,20 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
+                vol.Optional(
+                    CONF_PUSHOVER_ENABLED, default=DEFAULT_PUSHOVER_ENABLED
+                ): selector.BooleanSelector(),
+                vol.Optional(CONF_PUSHOVER_USER_KEY): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+                vol.Optional(CONF_PUSHOVER_DEVICE): selector.TextSelector(),
+                vol.Optional(
+                    CONF_PUSHOVER_PRIORITY, default=DEFAULT_PUSHOVER_PRIORITY
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-2, max=2, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
             }
         )
 
@@ -430,6 +450,28 @@ class SmartIrrigationOptionsFlow(config_entries.OptionsFlow):
                         max=120,
                         unit_of_measurement="min",
                         mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_PUSHOVER_ENABLED,
+                    default=current_config.get(CONF_PUSHOVER_ENABLED, DEFAULT_PUSHOVER_ENABLED),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_PUSHOVER_USER_KEY,
+                    default=current_config.get(CONF_PUSHOVER_USER_KEY, ""),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+                vol.Optional(
+                    CONF_PUSHOVER_DEVICE,
+                    default=current_config.get(CONF_PUSHOVER_DEVICE, ""),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_PUSHOVER_PRIORITY,
+                    default=current_config.get(CONF_PUSHOVER_PRIORITY, DEFAULT_PUSHOVER_PRIORITY),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-2, max=2, mode=selector.NumberSelectorMode.BOX
                     )
                 ),
             }

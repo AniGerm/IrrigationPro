@@ -89,6 +89,27 @@ Für jede Zone:
 - **Niedrige Temperatur**: Min. Temperatur-Schwellwert (°C)
 - **Hohe Temperatur**: Min. Max-Temperatur-Schwellwert (°C)
 - **Recheck-Zeit**: Minuten vor Start erneut prüfen (0 = deaktiviert)
+- **Pushover aktivieren**: Push-Benachrichtigungen über Pushover senden
+- **Pushover User Key**: Dein Pushover User Key
+- **Pushover Device** (optional): Spezifisches Gerät
+- **Pushover Priority**: Priorität der Benachrichtigungen (-2 bis 2)
+
+### Pushover-Benachrichtigungen
+
+Die Integration kann automatische Benachrichtigungen über Pushover senden:
+- **Start der Bewässerung**: Wenn ein Bewässerungszyklus beginnt
+- **Zonenstart**: Wenn eine einzelne Zone startet (niedrige Priorität)
+- **Bewässerung abgeschlossen**: Nach erfolgreichem Abschluss
+- **Fehler**: Bei Problemen während der Bewässerung
+
+**Setup:**
+1. Registriere dich bei [Pushover](https://pushover.net/)
+2. Installiere die Pushover-App auf deinem Smartphone
+3. Kopiere deinen User Key aus dem Pushover Dashboard
+4. Optional: Konfiguriere die [Home Assistant Pushover Integration](https://www.home-assistant.io/integrations/pushover/)
+5. Aktiviere Pushover in den IrrigationPro-Einstellungen
+
+**Hinweis:** Die HA Pushover-Integration muss **nicht** eingerichtet sein - IrrigationPro ruft den `notify.pushover` Service direkt auf.
 
 ## 📊 Entities
 

@@ -30,6 +30,12 @@ CONF_LOW_THRESHOLD: Final = "low_threshold"
 CONF_HIGH_THRESHOLD: Final = "high_threshold"
 CONF_RECHECK_TIME: Final = "recheck_time"
 
+# Notifications
+CONF_PUSHOVER_ENABLED: Final = "pushover_enabled"
+CONF_PUSHOVER_USER_KEY: Final = "pushover_user_key"
+CONF_PUSHOVER_DEVICE: Final = "pushover_device"
+CONF_PUSHOVER_PRIORITY: Final = "pushover_priority"
+
 # Solar radiation (monthly average kWh/day)
 CONF_SOLAR_RADIATION: Final = "solar_radiation"
 
@@ -43,6 +49,8 @@ DEFAULT_CYCLES: Final = 2
 DEFAULT_LOW_THRESHOLD: Final = 5
 DEFAULT_HIGH_THRESHOLD: Final = 15
 DEFAULT_RECHECK_TIME: Final = 0
+DEFAULT_PUSHOVER_ENABLED: Final = False
+DEFAULT_PUSHOVER_PRIORITY: Final = 0
 DEFAULT_ZONE_AREA: Final = 10.0
 DEFAULT_ZONE_FLOW_RATE: Final = 2.0
 DEFAULT_ZONE_EFFICIENCY: Final = 90

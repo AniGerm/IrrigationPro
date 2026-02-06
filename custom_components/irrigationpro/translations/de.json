@@ -44,7 +44,11 @@
           "cycles": "Anzahl Zyklen pro Durchlauf (1-5)",
           "low_threshold": "Niedrige Temperatur-Schwelle (°C)",
           "high_threshold": "Hohe Temperatur-Schwelle (°C)",
-          "recheck_time": "Recheck vor Start (Minuten, 0 zum Deaktivieren)"
+          "recheck_time": "Recheck vor Start (Minuten, 0 zum Deaktivieren)",
+          "pushover_enabled": "Pushover-Benachrichtigungen aktivieren",
+          "pushover_user_key": "Pushover User Key",
+          "pushover_device": "Pushover-Gerät (optional)",
+          "pushover_priority": "Benachrichtigungs-Priorität (-2 bis 2)"
         }
       }
     },

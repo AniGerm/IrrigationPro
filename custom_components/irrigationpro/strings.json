@@ -44,7 +44,11 @@
           "cycles": "Number of cycles per run (1-5)",
           "low_threshold": "Low temperature threshold (°C)",
           "high_threshold": "High temperature threshold (°C)",
-          "recheck_time": "Recheck before run (minutes, 0 to disable)"
+          "recheck_time": "Recheck before run (minutes, 0 to disable)",
+          "pushover_enabled": "Enable Pushover notifications",
+          "pushover_user_key": "Pushover User Key",
+          "pushover_device": "Pushover Device (optional)",
+          "pushover_priority": "Notification Priority (-2 to 2)"
         }
       }
     },

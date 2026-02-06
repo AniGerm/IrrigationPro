@@ -20,6 +20,10 @@ from .const import (
     CONF_HIGH_THRESHOLD,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
+    CONF_PUSHOVER_DEVICE,
+    CONF_PUSHOVER_ENABLED,
+    CONF_PUSHOVER_PRIORITY,
+    CONF_PUSHOVER_USER_KEY,
     CONF_RECHECK_TIME,
     CONF_SOLAR_RADIATION,
     CONF_SUNRISE_OFFSET,
@@ -419,6 +423,13 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         _LOGGER.info("Starting watering cycle (1/%d)", cycles)
         
+        # Send start notification
+        await self._send_pushover_notification(
+            f"🚿 Bewässerung gestartet",
+            f"Starte Bewässerungszyklus ({cycles} Durchgänge)",
+            priority=0
+        )
+        
         try:
             for cycle in range(cycles):
                 if cycle > 0:
@@ -429,6 +440,14 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                         await self._water_zone(zone)
             
             _LOGGER.info("Watering cycle completed")
+            
+            # Send completion notification
+            zones_watered = [z.name for z in self.zones if z.enabled and z.duration > 0]
+            await self._send_pushover_notification(
+                f"✅ Bewässerung abgeschlossen",
+                f"Alle Zonen bewässert: {', '.join(zones_watered)}",
+                priority=0
+            )
             
             # Update last run times
             for zone in self.zones:
@@ -443,10 +462,23 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             
         except Exception as err:
             _LOGGER.error("Error during watering cycle: %s", err)
+            # Send error notification
+            await self._send_pushover_notification(
+                f"❌ Bewässerungsfehler",
+                f"Fehler beim Bewässern: {err}",
+                priority=1
+            )
 
     async def _water_zone(self, zone: ZoneData):
         """Water a single zone."""
         _LOGGER.info("Starting zone '%s' for %.1f minutes", zone.name, zone.duration)
+        
+        # Send zone start notification
+        await self._send_pushover_notification(
+            f"💧 Zone '{zone.name}' gestartet",
+            f"Bewässere für {zone.duration:.1f} Minuten (ETo: {zone.eto_total:.1f}mm)",
+            priority=-1  # Low priority for individual zones
+        )
         
         zone.is_running = True
         zone.next_run = dt_util.now()
@@ -522,6 +554,44 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         }
         
         await self._storage.async_save(data)
+
+    async def _send_pushover_notification(
+        self, title: str, message: str, priority: int = 0
+    ):
+        """Send Pushover notification if enabled."""
+        if not self.entry.data.get(CONF_PUSHOVER_ENABLED, False):
+            return
+        
+        user_key = self.entry.data.get(CONF_PUSHOVER_USER_KEY)
+        if not user_key:
+            _LOGGER.warning("Pushover enabled but no user key configured")
+            return
+        
+        try:
+            service_data = {
+                "message": message,
+                "title": title,
+                "data": {
+                    "priority": self.entry.data.get(CONF_PUSHOVER_PRIORITY, priority),
+                }
+            }
+            
+            # Add device if specified
+            device = self.entry.data.get(CONF_PUSHOVER_DEVICE)
+            if device:
+                service_data["target"] = device
+            
+            # Call notify.pushover service
+            await self.hass.services.async_call(
+                "notify",
+                "pushover",
+                service_data,
+                blocking=False,
+            )
+            _LOGGER.debug("Sent Pushover notification: %s", title)
+            
+        except Exception as err:
+            _LOGGER.error("Failed to send Pushover notification: %s", err)
 
     async def async_shutdown(self):
         """Shutdown coordinator."""

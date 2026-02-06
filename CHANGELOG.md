@@ -5,6 +5,26 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.1.0] - 2026-02-06
+
+### Hinzugefügt
+- **Pushover-Benachrichtigungen**: Automatische Push-Benachrichtigungen bei Bewässerungsereignissen
+  - Benachrichtigung bei Start des Bewässerungszyklus
+  - Benachrichtigung bei Start einzelner Zonen (niedrige Priorität)
+  - Benachrichtigung bei erfolgreichem Abschluss
+  - Fehlerbenachrichtigungen bei Problemen
+- Konfigurierbare Pushover-Einstellungen im Config Flow und Options Flow:
+  - User Key
+  - Device (optional)
+  - Priorität (-2 bis 2)
+- HACS_INSTALLATION.md mit detaillierter Anleitung für Installation über HACS
+- Unterscheidung zwischen Integration und Add-on in Dokumentation
+- Pushover-Setup-Anleitung in README.md
+
+### Geändert
+- Erweiterte UI-Übersetzungen (Deutsch und Englisch) für Pushover-Felder
+- Verbesserte Dokumentation mit Pushover-Konfiguration
+
 ## [1.0.0] - 2026-02-06
 
 ### Hinzugefügt
