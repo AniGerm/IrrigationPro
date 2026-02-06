@@ -38,9 +38,12 @@ from .const import (
     CONF_ZONE_EXPOSURE_FACTOR,
     CONF_ZONE_FLOW_RATE,
     CONF_ZONE_MAX_DURATION,
+    CONF_ZONE_MONTHS,
+    CONF_ZONE_NAME,
     CONF_ZONE_PLANT_DENSITY,
     CONF_ZONE_RAIN_FACTORING,
     CONF_ZONE_RAIN_THRESHOLD,
+    CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_SOLAR_RADIATION,
     DOMAIN,
@@ -61,7 +64,7 @@ class ZoneData:
     def __init__(self, zone_id: int, config: dict[str, Any]):
         """Initialize zone data."""
         self.zone_id = zone_id
-        self.name = config.get("zone_name", f"Zone {zone_id}")
+        self.name = config.get(CONF_ZONE_NAME, f"Zone {zone_id}")
         self.enabled = config.get(CONF_ZONE_ENABLED, True)
         self.adaptive = config.get(CONF_ZONE_ADAPTIVE, True)
         self.area = config.get(CONF_ZONE_AREA, 10.0)
@@ -141,19 +144,21 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             _LOGGER.error("No zones configuration found in entry data")
             raise ValueError("No zones configured")
         
+        _LOGGER.debug("Raw zones_config from entry: %s", zones_config)
+        
         try:
-            self.zones = [
-                ZoneData(i + 1, zone_config)
-                for i, zone_config in enumerate(zones_config)
-            ]
-            _LOGGER.debug("Initialized %d zones", len(self.zones))
-            
-            # Log zone details
-            for zone in self.zones:
+            self.zones = []
+            for i, zone_config in enumerate(zones_config):
+                _LOGGER.debug("Processing zone %d config: %s", i + 1, zone_config)
+                zone = ZoneData(i + 1, zone_config)
+                self.zones.append(zone)
                 _LOGGER.debug(
-                    "Zone %d: %s (enabled=%s, adaptive=%s, area=%.1fm²)",
+                    "Zone %d initialized: %s (enabled=%s, adaptive=%s, area=%.1fm²)",
                     zone.zone_id, zone.name, zone.enabled, zone.adaptive, zone.area
                 )
+            
+            _LOGGER.info("Successfully initialized %d zones", len(self.zones))
+            
         except Exception as err:
             _LOGGER.error("Error initializing zones: %s", err, exc_info=True)
             raise ValueError(f"Failed to initialize zones: {err}") from err
