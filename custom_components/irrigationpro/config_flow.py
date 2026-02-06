@@ -92,9 +92,23 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Store initial configuration
-            self._data.update(user_input)
-            return await self.async_step_zones()
+            try:
+                # Validate weather entity exists
+                weather_entity = user_input.get(CONF_WEATHER_ENTITY)
+                if weather_entity:
+                    state = self.hass.states.get(weather_entity)
+                    if state is None:
+                        errors["base"] = "weather_entity_not_found"
+                        _LOGGER.error("Weather entity %s not found", weather_entity)
+                    else:
+                        # Store initial configuration
+                        self._data.update(user_input)
+                        return await self.async_step_zones()
+                else:
+                    errors["base"] = "no_weather_entity"
+            except Exception as err:
+                _LOGGER.error("Error in user step: %s", err, exc_info=True)
+                errors["base"] = "unknown"
 
         # Get available weather entities
         weather_entities = await _get_weather_entities(self.hass)
@@ -125,14 +139,20 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            num_zones = user_input.get("num_zones", 1)
-            if 1 <= num_zones <= 16:
-                self._num_zones = num_zones
-                self._current_zone = 0
-                self._zones_config = []
-                return await self.async_step_zone_details()
-            else:
-                errors["num_zones"] = "invalid_num_zones"
+            try:
+                num_zones = user_input.get("num_zones", 1)
+                if 1 <= num_zones <= 16:
+                    self._num_zones = num_zones
+                    self._current_zone = 0
+                    self._zones_config = []
+                    _LOGGER.debug("Configuring %d zones", num_zones)
+                    return await self.async_step_zone_details()
+                else:
+                    errors["num_zones"] = "invalid_num_zones"
+                    _LOGGER.warning("Invalid number of zones: %s", num_zones)
+            except Exception as err:
+                _LOGGER.error("Error in zones step: %s", err, exc_info=True)
+                errors["base"] = "unknown"
 
         data_schema = vol.Schema(
             {
@@ -295,17 +315,33 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Store scheduling configuration
-            self._data.update(user_input)
+            try:
+                # Store scheduling configuration
+                self._data.update(user_input)
 
-            # Add default solar radiation if not provided
-            if CONF_SOLAR_RADIATION not in self._data:
-                self._data[CONF_SOLAR_RADIATION] = DEFAULT_SOLAR_RADIATION
+                # Validate Pushover configuration if enabled
+                if user_input.get(CONF_PUSHOVER_ENABLED, False):
+                    if not user_input.get(CONF_PUSHOVER_USER_KEY):
+                        errors["base"] = "pushover_no_key"
+                        _LOGGER.warning("Pushover enabled but no user key provided")
 
-            # Create the config entry
-            return self.async_create_entry(
-                title="IrrigationPro", data=self._data
-            )
+                if errors:
+                    # Return form with errors
+                    pass
+                else:
+                    # Add default solar radiation if not provided
+                    if CONF_SOLAR_RADIATION not in self._data:
+                        self._data[CONF_SOLAR_RADIATION] = DEFAULT_SOLAR_RADIATION
+
+                    _LOGGER.debug("Creating config entry with data: %s", {k: v for k, v in self._data.items() if 'key' not in k.lower()})
+
+                    # Create the config entry
+                    return self.async_create_entry(
+                        title="IrrigationPro", data=self._data
+                    )
+            except Exception as err:
+                _LOGGER.error("Error in scheduling step: %s", err, exc_info=True)
+                errors["base"] = "unknown"
 
         data_schema = vol.Schema(
             {
@@ -397,8 +433,25 @@ class SmartIrrigationOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
+        errors = {}
+        
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            try:
+                # Validate Pushover configuration if enabled
+                if user_input.get(CONF_PUSHOVER_ENABLED, False):
+                    if not user_input.get(CONF_PUSHOVER_USER_KEY):
+                        errors["base"] = "pushover_no_key"
+                
+                if not errors:
+                    # Update config entry data with new options
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        data={**self.config_entry.data, **user_input}
+                    )
+                    return self.async_create_entry(title="", data={})
+            except Exception as err:
+                _LOGGER.error("Error in options flow: %s", err, exc_info=True)
+                errors["base"] = "unknown"
 
         # Get current configuration
         current_config = self.config_entry.data

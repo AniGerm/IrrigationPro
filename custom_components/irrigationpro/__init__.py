@@ -30,28 +30,37 @@ PLATFORMS: list[Platform] = [Platform.SWITCH, Platform.SENSOR, Platform.BINARY_S
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up IrrigationPro from a config entry."""
-    _LOGGER.debug("Setting up IrrigationPro with entry: %s", entry.data)
+    _LOGGER.debug("Setting up IrrigationPro with entry: %s", entry.entry_id)
 
-    # Create coordinator
-    coordinator = SmartIrrigationCoordinator(hass, entry)
+    try:
+        # Create coordinator
+        coordinator = SmartIrrigationCoordinator(hass, entry)
 
-    # Store coordinator
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+        # Store coordinator
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Fetch initial data
-    await coordinator.async_config_entry_first_refresh()
+        # Fetch initial data
+        await coordinator.async_config_entry_first_refresh()
 
-    # Setup platforms
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        # Setup platforms
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Register update listener for options
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+        # Register update listener for options
+        entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
-    # Register services
-    await async_setup_services(hass, coordinator)
+        # Register services
+        await async_setup_services(hass, coordinator)
 
-    return True
+        _LOGGER.info("IrrigationPro setup completed successfully")
+        return True
+        
+    except Exception as err:
+        _LOGGER.error("Error setting up IrrigationPro: %s", err, exc_info=True)
+        # Clean up if setup failed
+        if entry.entry_id in hass.data.get(DOMAIN, {}):
+            hass.data[DOMAIN].pop(entry.entry_id)
+        raise
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

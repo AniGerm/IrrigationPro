@@ -55,7 +55,11 @@
     "error": {
       "cannot_connect": "Failed to connect to weather source",
       "invalid_auth": "Invalid API key",
-      "unknown": "Unexpected error occurred"
+      "unknown": "Unexpected error occurred",
+      "no_weather_entity": "No weather entity selected",
+      "weather_entity_not_found": "Selected weather entity not found",
+      "pushover_no_key": "Pushover enabled but no user key provided",
+      "invalid_num_zones": "Invalid number of zones (must be 1-16)"
     },
     "abort": {
       "already_configured": "Device is already configured"

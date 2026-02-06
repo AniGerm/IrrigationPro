@@ -56,7 +56,11 @@
       "cannot_connect": "Verbindung zur Wetterquelle fehlgeschlagen",
       "invalid_auth": "Ungültiger API-Schlüssel",
       "unknown": "Unerwarteter Fehler aufgetreten",
-      "no_weather_entities": "Keine Wetter-Entities gefunden"
+      "no_weather_entities": "Keine Wetter-Entities gefunden",
+      "no_weather_entity": "Keine Wetter-Entity ausgewählt",
+      "weather_entity_not_found": "Ausgewählte Wetter-Entity nicht gefunden",
+      "pushover_no_key": "Pushover aktiviert, aber kein User Key angegeben",
+      "invalid_num_zones": "Ungültige Anzahl an Zonen (muss 1-16 sein)"
     },
     "abort": {
       "already_configured": "Gerät ist bereits konfiguriert"

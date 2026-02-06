@@ -109,6 +109,15 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._watering_task = None
         self._storage: Store | None = None
         
+        # Validate configuration
+        if not entry.data.get(CONF_WEATHER_ENTITY):
+            raise ValueError("No weather entity configured")
+        
+        if not entry.data.get(CONF_ZONES):
+            raise ValueError("No zones configured")
+        
+        _LOGGER.debug("Initializing coordinator with %d zones", len(entry.data.get(CONF_ZONES, [])))
+        
         # Initialize weather provider
         self.weather_provider = WeatherProvider(
             hass,
@@ -128,11 +137,26 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     def _init_zones(self):
         """Initialize zones from configuration."""
         zones_config = self.entry.data.get(CONF_ZONES, [])
-        self.zones = [
-            ZoneData(i + 1, zone_config)
-            for i, zone_config in enumerate(zones_config)
-        ]
-        _LOGGER.debug("Initialized %d zones", len(self.zones))
+        if not zones_config:
+            _LOGGER.error("No zones configuration found in entry data")
+            raise ValueError("No zones configured")
+        
+        try:
+            self.zones = [
+                ZoneData(i + 1, zone_config)
+                for i, zone_config in enumerate(zones_config)
+            ]
+            _LOGGER.debug("Initialized %d zones", len(self.zones))
+            
+            # Log zone details
+            for zone in self.zones:
+                _LOGGER.debug(
+                    "Zone %d: %s (enabled=%s, adaptive=%s, area=%.1fm²)",
+                    zone.zone_id, zone.name, zone.enabled, zone.adaptive, zone.area
+                )
+        except Exception as err:
+            _LOGGER.error("Error initializing zones: %s", err, exc_info=True)
+            raise ValueError(f"Failed to initialize zones: {err}") from err
 
     async def async_config_entry_first_refresh(self):
         """Refresh data for the first time when config entry is setup."""
