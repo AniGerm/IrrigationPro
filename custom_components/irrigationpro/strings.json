@@ -1,0 +1,68 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "IrrigationPro Setup",
+        "description": "Configure your smart irrigation system",
+        "data": {
+          "weather_entity": "Weather Entity",
+          "use_owm": "Use OpenWeatherMap as fallback",
+          "owm_api_key": "OpenWeatherMap API Key (optional)"
+        }
+      },
+      "zones": {
+        "title": "Configure Zones",
+        "description": "How many irrigation zones do you want to configure?",
+        "data": {
+          "num_zones": "Number of zones (1-16)"
+        }
+      },
+      "zone_details": {
+        "title": "Zone {zone_number} Configuration",
+        "description": "Configure details for zone {zone_number}",
+        "data": {
+          "zone_name": "Zone Name",
+          "zone_area": "Area (m²)",
+          "zone_flow_rate": "Emitter Flow Rate (L/h)",
+          "zone_emitter_count": "Number of Emitters",
+          "zone_efficiency": "System Efficiency (%)",
+          "zone_crop_coef": "Crop Coefficient (0.1-0.9)",
+          "zone_plant_density": "Plant Density (0.5-1.3)",
+          "zone_exposure_factor": "Exposure Factor (0.5-1.4)",
+          "zone_max_duration": "Max Duration (minutes)",
+          "zone_rain_threshold": "Rain Threshold (mm)",
+          "zone_rain_factoring": "Factor in rainfall",
+          "zone_enabled": "Zone enabled",
+          "zone_adaptive": "Adaptive watering"
+        }
+      },
+      "scheduling": {
+        "title": "Scheduling Configuration",
+        "description": "Configure watering schedule parameters",
+        "data": {
+          "sunrise_offset": "Minutes before sunrise (can be negative)",
+          "cycles": "Number of cycles per run (1-5)",
+          "low_threshold": "Low temperature threshold (°C)",
+          "high_threshold": "High temperature threshold (°C)",
+          "recheck_time": "Recheck before run (minutes, 0 to disable)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to weather source",
+      "invalid_auth": "Invalid API key",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Configuration",
+        "description": "Update your IrrigationPro settings"
+      }
+    }
+  }
+}

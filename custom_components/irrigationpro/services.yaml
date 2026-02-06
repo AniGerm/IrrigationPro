@@ -1,0 +1,44 @@
+start_zone:
+  name: Start Zone
+  description: Manually start an irrigation zone for a specified duration
+  fields:
+    zone_id:
+      name: Zone ID
+      description: The ID of the zone to start (1-16)
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 16
+          mode: box
+    duration:
+      name: Duration
+      description: Duration in minutes to run the zone
+      required: true
+      example: 15
+      selector:
+        number:
+          min: 1
+          max: 180
+          unit_of_measurement: minutes
+          mode: box
+
+stop_zone:
+  name: Stop Zone
+  description: Stop a running irrigation zone
+  fields:
+    zone_id:
+      name: Zone ID
+      description: The ID of the zone to stop (1-16)
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 16
+          mode: box
+
+recalculate:
+  name: Recalculate Schedule
+  description: Force recalculation of the irrigation schedule based on current weather data
