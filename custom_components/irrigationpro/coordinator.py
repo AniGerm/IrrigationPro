@@ -74,8 +74,9 @@ class ZoneData:
         self.max_duration = config.get(CONF_ZONE_MAX_DURATION, 60)
         self.rain_threshold = config.get(CONF_ZONE_RAIN_THRESHOLD, 2.5)
         self.rain_factoring = config.get(CONF_ZONE_RAIN_FACTORING, True)
-        self.weekdays = config.get("zone_weekdays", list(WEEKDAYS))
-        self.months = config.get("zone_months", list(range(1, 13)))
+        # Use CONF keys for weekdays and months with proper defaults
+        self.weekdays = config.get(CONF_ZONE_WEEKDAYS, WEEKDAYS)
+        self.months = config.get(CONF_ZONE_MONTHS, list(range(1, 13)))
         
         # Runtime data
         self.duration = 0  # Minutes for next run

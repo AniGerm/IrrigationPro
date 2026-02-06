@@ -155,17 +155,22 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Store zone configuration
-            self._zones_config.append(user_input)
-            self._current_zone += 1
+            try:
+                # Store zone configuration
+                _LOGGER.debug("Zone %d config received: %s", self._current_zone + 1, user_input)
+                self._zones_config.append(user_input)
+                self._current_zone += 1
 
-            # Check if we need to configure more zones
-            if self._current_zone < self._num_zones:
-                return await self.async_step_zone_details()
-            else:
-                # All zones configured, move to scheduling
-                self._data[CONF_ZONES] = self._zones_config
-                return await self.async_step_scheduling()
+                # Check if we need to configure more zones
+                if self._current_zone < self._num_zones:
+                    return await self.async_step_zone_details()
+                else:
+                    # All zones configured, move to scheduling
+                    self._data[CONF_ZONES] = self._zones_config
+                    return await self.async_step_scheduling()
+            except Exception as err:
+                _LOGGER.error("Error in zone_details step: %s", err, exc_info=True)
+                errors["base"] = "unknown"
 
         # Schema for current zone
         zone_number = self._current_zone + 1
