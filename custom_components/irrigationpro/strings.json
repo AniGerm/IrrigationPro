@@ -22,6 +22,7 @@
         "description": "Configure details for zone {zone_number}",
         "data": {
           "zone_name": "Zone Name",
+          "zone_switch_entity": "Switch/Valve Entity",
           "zone_area": "Area (m²)",
           "zone_flow_rate": "Emitter Flow Rate (L/h)",
           "zone_emitter_count": "Number of Emitters",

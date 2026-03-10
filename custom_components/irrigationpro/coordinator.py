@@ -41,6 +41,7 @@ from .const import (
     CONF_ZONE_PLANT_DENSITY,
     CONF_ZONE_RAIN_FACTORING,
     CONF_ZONE_RAIN_THRESHOLD,
+    CONF_ZONE_SWITCH_ENTITY,
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_SOLAR_RADIATION,
@@ -75,6 +76,7 @@ class ZoneData:
         self.max_duration = config.get(CONF_ZONE_MAX_DURATION, 60)
         self.rain_threshold = config.get(CONF_ZONE_RAIN_THRESHOLD, 2.5)
         self.rain_factoring = config.get(CONF_ZONE_RAIN_FACTORING, True)
+        self.switch_entity = config.get(CONF_ZONE_SWITCH_ENTITY)
         # Use CONF keys for weekdays and months with proper defaults
         self.weekdays = config.get(CONF_ZONE_WEEKDAYS, WEEKDAYS)
         self.months = config.get(CONF_ZONE_MONTHS, list(range(1, 13)))
@@ -545,6 +547,19 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         if zone.is_running:
             _LOGGER.info("Stopping zone '%s'", zone.name)
             zone.is_running = False
+            
+            # Turn off the actual switch/valve entity
+            if zone.switch_entity:
+                try:
+                    await self.hass.services.async_call(
+                        "homeassistant", "turn_off",
+                        {"entity_id": zone.switch_entity},
+                        blocking=True,
+                    )
+                    _LOGGER.info("Turned off entity '%s' for zone '%s'", zone.switch_entity, zone.name)
+                except Exception as err:
+                    _LOGGER.error("Failed to turn off entity '%s': %s", zone.switch_entity, err)
+            
             self.async_set_updated_data(self.data)
 
     async def _async_load_storage(self):

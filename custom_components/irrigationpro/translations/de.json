@@ -22,6 +22,7 @@
         "description": "Konfiguriere Details für Zone {zone_number}",
         "data": {
           "zone_name": "Zonenname",
+          "zone_switch_entity": "Schalter/Ventil-Entity",
           "zone_area": "Fläche (m²)",
           "zone_flow_rate": "Emitter-Durchfluss (L/h)",
           "zone_emitter_count": "Anzahl Emitter",

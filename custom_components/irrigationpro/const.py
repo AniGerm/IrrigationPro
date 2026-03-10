@@ -20,6 +20,7 @@ CONF_ZONE_RAIN_THRESHOLD: Final = "zone_rain_threshold"
 CONF_ZONE_RAIN_FACTORING: Final = "zone_rain_factoring"
 CONF_ZONE_ENABLED: Final = "zone_enabled"
 CONF_ZONE_ADAPTIVE: Final = "zone_adaptive"
+CONF_ZONE_SWITCH_ENTITY: Final = "zone_switch_entity"
 CONF_ZONE_WEEKDAYS: Final = "zone_weekdays"
 CONF_ZONE_MONTHS: Final = "zone_months"
 

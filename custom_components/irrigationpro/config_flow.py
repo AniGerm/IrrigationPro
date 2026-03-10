@@ -37,6 +37,7 @@ from .const import (
     CONF_ZONE_PLANT_DENSITY,
     CONF_ZONE_RAIN_FACTORING,
     CONF_ZONE_RAIN_THRESHOLD,
+    CONF_ZONE_SWITCH_ENTITY,
     CONF_ZONES,
     DEFAULT_CYCLES,
     DEFAULT_HIGH_THRESHOLD,
@@ -199,6 +200,13 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_ZONE_NAME, default=f"Zone {zone_number}"
                 ): selector.TextSelector(),
+                vol.Required(
+                    CONF_ZONE_SWITCH_ENTITY
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=["switch", "light", "valve"],
+                    )
+                ),
                 vol.Required(
                     CONF_ZONE_AREA, default=DEFAULT_ZONE_AREA
                 ): selector.NumberSelector(
@@ -419,15 +427,11 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> SmartIrrigationOptionsFlow:
         """Get the options flow for this handler."""
-        return SmartIrrigationOptionsFlow(config_entry)
+        return SmartIrrigationOptionsFlow()
 
 
 class SmartIrrigationOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for IrrigationPro."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry):
-        """Initialize options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
