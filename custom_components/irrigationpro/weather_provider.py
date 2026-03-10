@@ -6,18 +6,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
-from homeassistant.components.weather import (
-    ATTR_WEATHER_HUMIDITY,
-    ATTR_WEATHER_PRESSURE,
-    ATTR_WEATHER_TEMPERATURE,
-    ATTR_WEATHER_WIND_SPEED,
-)
-from homeassistant.const import (
-    ATTR_LATITUDE,
-    ATTR_LONGITUDE,
-)
+from astral import LocationInfo
+from astral.sun import sun as astral_sun
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.sun import get_astral_location
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,6 +30,7 @@ class WeatherData:
         self.rain: float = 0
         self.clouds: float = 0
         self.summary: str = ""
+        self.eto: float = 0
 
 
 class WeatherProvider:
@@ -105,10 +97,12 @@ class WeatherProvider:
                 _LOGGER.debug("Could not call get_forecasts service: %s", err)
                 forecast_attr = []
 
-        # Get location for sunrise calculation
-        location = await get_astral_location(self.hass)
-        lat = self.hass.config.latitude
-        lon = self.hass.config.longitude
+        # Set up location for sunrise calculation
+        location = LocationInfo(
+            latitude=self.hass.config.latitude,
+            longitude=self.hass.config.longitude,
+            timezone=str(dt_util.DEFAULT_TIME_ZONE),
+        )
 
         # Parse forecast data
         for i in range(min(days, len(forecast_attr) if forecast_attr else 0)):
@@ -118,7 +112,15 @@ class WeatherProvider:
             
             # Calculate sunrise for this day
             target_date = dt_util.now() + timedelta(days=i)
-            weather.sunrise = location.sunrise(target_date, local=True)
+            try:
+                sun_info = astral_sun(
+                    location.observer,
+                    date=target_date.date(),
+                    tzinfo=dt_util.DEFAULT_TIME_ZONE,
+                )
+                weather.sunrise = sun_info["sunrise"]
+            except Exception:
+                weather.sunrise = target_date.replace(hour=6, minute=0, second=0, microsecond=0)
             
             # Temperature
             weather.min_temp = forecast_day.get("templow", forecast_day.get("temperature", 15))
@@ -156,7 +158,15 @@ class WeatherProvider:
         while len(forecast_data) < days:
             weather = WeatherData()
             target_date = dt_util.now() + timedelta(days=len(forecast_data))
-            weather.sunrise = location.sunrise(target_date, local=True)
+            try:
+                sun_info = astral_sun(
+                    location.observer,
+                    date=target_date.date(),
+                    tzinfo=dt_util.DEFAULT_TIME_ZONE,
+                )
+                weather.sunrise = sun_info["sunrise"]
+            except Exception:
+                weather.sunrise = target_date.replace(hour=6, minute=0, second=0, microsecond=0)
             weather.min_temp = 15
             weather.max_temp = 20
             weather.humidity = 60

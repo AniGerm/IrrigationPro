@@ -6,7 +6,6 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
@@ -140,7 +139,7 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                num_zones = user_input.get("num_zones", 1)
+                num_zones = int(user_input.get("num_zones", 1))
                 if 1 <= num_zones <= 16:
                     self._num_zones = num_zones
                     self._current_zone = 0

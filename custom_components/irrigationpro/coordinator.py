@@ -7,11 +7,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_LATITUDE, ATTR_LONGITUDE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.sun import get_astral_location
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -111,6 +109,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._recheck_timer = None
         self._watering_task = None
         self._storage: Store | None = None
+        self._schedule_checker_unsub = None
         
         # Validate configuration
         if not entry.data.get(CONF_WEATHER_ENTITY):
@@ -194,7 +193,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             
             for day_data in self.forecast:
                 month = day_data.sunrise.month
-                solar_rad = solar_rad_data.get(month, 6.0)
+                # Keys may be strings after JSON serialization
+                solar_rad = solar_rad_data.get(month) or solar_rad_data.get(str(month), 6.0)
                 
                 day_data.eto = calculate_eto(
                     min_temp=day_data.min_temp,

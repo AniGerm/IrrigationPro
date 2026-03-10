@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -10,7 +9,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     ATTR_DURATION,
@@ -19,7 +17,6 @@ from .const import (
     SERVICE_RECALCULATE,
     SERVICE_START_ZONE,
     SERVICE_STOP_ZONE,
-    UPDATE_INTERVAL_MINUTES,
 )
 from .coordinator import SmartIrrigationCoordinator
 
@@ -49,8 +46,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Register update listener for options
         entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
-        # Register services
-        await async_setup_services(hass, coordinator)
+        # Register services (only once)
+        if not hass.services.has_service(DOMAIN, SERVICE_START_ZONE):
+            await async_setup_services(hass)
 
         _LOGGER.info("IrrigationPro setup completed successfully")
         return True
@@ -76,6 +74,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Remove coordinator
         hass.data[DOMAIN].pop(entry.entry_id)
+        
+        # Unregister services if this was the last entry
+        if not hass.data[DOMAIN]:
+            for service_name in (SERVICE_START_ZONE, SERVICE_STOP_ZONE, SERVICE_RECALCULATE):
+                hass.services.async_remove(DOMAIN, service_name)
 
     return unload_ok
 
@@ -87,7 +90,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_setup_services(
-    hass: HomeAssistant, coordinator: SmartIrrigationCoordinator
+    hass: HomeAssistant,
 ) -> None:
     """Set up services for IrrigationPro."""
 
@@ -98,10 +101,13 @@ async def async_setup_services(
         
         _LOGGER.info("Service call: start_zone (zone_id=%s, duration=%s)", zone_id, duration)
         
-        try:
-            await coordinator.async_start_zone_manual(zone_id, duration)
-        except ValueError as err:
-            _LOGGER.error("Error starting zone: %s", err)
+        for entry_id, coordinator in hass.data.get(DOMAIN, {}).items():
+            try:
+                await coordinator.async_start_zone_manual(zone_id, duration)
+                return
+            except ValueError:
+                continue
+        _LOGGER.error("Zone %s not found in any coordinator", zone_id)
 
     async def handle_stop_zone(call: ServiceCall) -> None:
         """Handle the stop_zone service call."""
@@ -109,15 +115,19 @@ async def async_setup_services(
         
         _LOGGER.info("Service call: stop_zone (zone_id=%s)", zone_id)
         
-        try:
-            await coordinator.async_stop_zone(zone_id)
-        except ValueError as err:
-            _LOGGER.error("Error stopping zone: %s", err)
+        for entry_id, coordinator in hass.data.get(DOMAIN, {}).items():
+            try:
+                await coordinator.async_stop_zone(zone_id)
+                return
+            except ValueError:
+                continue
+        _LOGGER.error("Zone %s not found in any coordinator", zone_id)
 
     async def handle_recalculate(call: ServiceCall) -> None:
         """Handle the recalculate service call."""
         _LOGGER.info("Service call: recalculate")
-        await coordinator.async_refresh()
+        for entry_id, coordinator in hass.data.get(DOMAIN, {}).items():
+            await coordinator.async_refresh()
 
     # Register services
     hass.services.async_register(

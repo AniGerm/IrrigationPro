@@ -85,7 +85,10 @@ def calculate_eto(
     l_rad = latitude * math.pi / 180
     
     # Sunset hour angle (rad)
-    sunset_ha = math.acos(-(math.tan(s_d) * math.tan(l_rad)))
+    # Clamp argument to [-1, 1] to avoid math domain errors at extreme latitudes
+    sunset_arg = -(math.tan(s_d) * math.tan(l_rad))
+    sunset_arg = max(-1.0, min(1.0, sunset_arg))
+    sunset_ha = math.acos(sunset_arg)
     
     # Extraterrestrial radiation (MJ/m²/day)
     r_a = (
@@ -111,8 +114,12 @@ def calculate_eto(
         * (math.pow((273.16 + max_temp), 4) + math.pow((273.16 + min_temp), 4))
         / 2
     )
-    r_nl = r_nl * (0.34 - (0.14 * math.sqrt(e_a)))
-    r_nl = r_nl * ((1.35 * r_s / r_so) - 0.35)
+    r_nl = r_nl * (0.34 - (0.14 * math.sqrt(max(0, e_a))))
+    # Guard against division by zero when r_so is 0
+    if r_so > 0:
+        r_nl = r_nl * ((1.35 * min(r_s / r_so, 1.0)) - 0.35)
+    else:
+        r_nl = r_nl * (1.35 * 0.5 - 0.35)
     
     # Net radiation (MJ/m²/day)
     r_n = r_ns - r_nl
