@@ -116,6 +116,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._storage: Store | None = None
         self._schedule_checker_unsub = None
         self.schedule_reason: str = ""  # Why no watering is scheduled
+        self.history: list[dict] = []  # Irrigation & skip history (max 180 entries)
         
         # Validate configuration
         if not entry.data.get(CONF_WEATHER_ENTITY):
@@ -284,6 +285,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 f"Temperatur zu niedrig (min: {forecast_day.min_temp:.1f}°C, "
                 f"max: {forecast_day.max_temp:.1f}°C – Schwelle: {low_threshold}/{high_threshold}°C)"
             )
+            self._log_skip_event(self.schedule_reason, forecast_day)
             return
         
         # Recalculate durations for the selected day
@@ -304,6 +306,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             _LOGGER.info("No watering needed")
             self.scheduled_run = None
             self.schedule_reason = "Kein Bewässerungsbedarf (ETo durch Regen gedeckt oder kein aktiver Bewässerungstag)"
+            self._log_skip_event(self.schedule_reason, self.forecast[day_index])
             return
         
         # Calculate start and end times
@@ -542,6 +545,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         zone.is_running = True
         zone.started_at = dt_util.now()
         zone.next_run = dt_util.now()
+        zone_planned_duration = zone.duration
         
         # Turn on the actual switch/valve entity
         if zone.switch_entity:
@@ -561,6 +565,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     zone.switch_entity, err,
                 )
                 zone.is_running = False
+                zone.started_at = None
                 self.async_set_updated_data(self.data)
                 return
         else:
@@ -571,8 +576,13 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         # Wait for duration
         try:
-            await asyncio.sleep(zone.duration * 60)
+            await asyncio.sleep(zone_planned_duration * 60)
         finally:
+            ts_end = dt_util.now()
+            # Log history entry
+            if zone.started_at:
+                actual_min = round((ts_end - zone.started_at).total_seconds() / 60, 1)
+                self._log_zone_run(zone, zone.started_at, ts_end, zone_planned_duration, actual_min)
             # Always turn off when done (even if cancelled)
             if zone.switch_entity:
                 try:
@@ -649,6 +659,60 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     _LOGGER.error("Failed to turn off entity '%s': %s", zone.switch_entity, err)
             
             self.async_set_updated_data(self.data)
+
+    def _log_zone_run(
+        self,
+        zone: ZoneData,
+        ts_start: datetime,
+        ts_end: datetime,
+        planned_min: float,
+        actual_min: float,
+    ) -> None:
+        """Append a zone-run event to history and persist."""
+        self.history.append({
+            "type": "zone_run",
+            "date": ts_start.strftime("%Y-%m-%d"),
+            "ts_start": ts_start.isoformat(),
+            "ts_end": ts_end.isoformat(),
+            "duration_planned": round(planned_min, 1),
+            "duration_actual": round(actual_min, 1),
+            "zone_id": zone.zone_id,
+            "zone_name": zone.name,
+            "eto": round(zone.eto_total, 2),
+            "rain": round(zone.rain_total, 2),
+            "water_needed": round(zone.water_needed, 2),
+            "switch_entity": zone.switch_entity or "",
+        })
+        if len(self.history) > 180:
+            self.history = self.history[-180:]
+        # Async-safe fire-and-forget save
+        self.hass.async_create_task(self._async_save_storage())
+
+    def _log_skip_event(self, reason: str, forecast_day) -> None:
+        """Append a skip event to history (deduplicated by date)."""
+        date_str = forecast_day.sunrise.strftime("%Y-%m-%d")
+        # Never log twice for the same date and type
+        if any(
+            e.get("date") == date_str and e.get("type") in ("skip", "no_water")
+            for e in self.history[-20:]
+        ):
+            return
+        event_type = "skip"
+        if "Bewässerungsbedarf" in reason or "Regen gedeckt" in reason:
+            event_type = "no_water"
+        self.history.append({
+            "type": event_type,
+            "date": date_str,
+            "ts": dt_util.now().isoformat(),
+            "reason": reason,
+            "eto": round(forecast_day.eto, 2),
+            "rain": round(forecast_day.rain, 2),
+            "min_temp": round(forecast_day.min_temp, 1),
+            "max_temp": round(forecast_day.max_temp, 1),
+        })
+        if len(self.history) > 180:
+            self.history = self.history[-180:]
+        self.hass.async_create_task(self._async_save_storage())
 
     async def async_set_zone_enabled(self, zone_id: int, enabled: bool) -> None:
         """Enable or disable a zone and recalculate schedule."""
@@ -774,6 +838,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                         zone.name,
                         zone.last_run,
                     )
+            # Restore history
+            self.history = data.get("history", [])
 
     async def _async_save_storage(self):
         """Save data to storage."""
@@ -787,7 +853,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     "last_run": zone.last_run.isoformat() if zone.last_run else None,
                 }
                 for zone in self.zones
-            ]
+            ],
+            "history": self.history[-180:],
         }
         
         await self._storage.async_save(data)

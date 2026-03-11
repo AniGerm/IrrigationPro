@@ -222,9 +222,34 @@ class IrrigationProTestView(HomeAssistantView):
         return self.json({"error": f"Unknown mode: {mode}"}, status_code=400)
 
 
+class IrrigationProHistoryView(HomeAssistantView):
+    """API view for irrigation history."""
+
+    url = "/api/irrigationpro/history"
+    name = "api:irrigationpro:history"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return irrigation history sorted newest-first."""
+        hass: HomeAssistant = request.app["hass"]
+        coordinators = hass.data.get(DOMAIN, {})
+        if not coordinators:
+            return self.json({"history": []})
+        coordinator = next(iter(coordinators.values()))
+        history = getattr(coordinator, "history", [])
+        # Sort newest first using ts_start (runs) or ts (skip events)
+        sorted_history = sorted(
+            history,
+            key=lambda x: x.get("ts_start") or x.get("ts") or "",
+            reverse=True,
+        )
+        return self.json({"history": sorted_history})
+
+
 def async_register_api(hass: HomeAssistant) -> None:
     """Register API views."""
     hass.http.register_view(IrrigationProApiView)
     hass.http.register_view(IrrigationProZoneControlView)
     hass.http.register_view(IrrigationProRecalculateView)
     hass.http.register_view(IrrigationProTestView)
+    hass.http.register_view(IrrigationProHistoryView)
