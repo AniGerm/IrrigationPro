@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -10,6 +11,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
+from .api import async_register_api
 from .const import (
     ATTR_DURATION,
     ATTR_ZONE_ID,
@@ -50,6 +52,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.services.has_service(DOMAIN, SERVICE_START_ZONE):
             await async_setup_services(hass)
 
+        # Register API endpoints and panel (only once)
+        if f"{DOMAIN}_panel_registered" not in hass.data:
+            async_register_api(hass)
+
+            # Register static path for frontend files
+            frontend_path = Path(__file__).parent / "frontend"
+            hass.http.register_static_path(
+                f"/{DOMAIN}/frontend", str(frontend_path), cache_headers=False
+            )
+
+            # Register panel in sidebar
+            hass.components.frontend.async_register_built_in_panel(
+                component_name="iframe",
+                sidebar_title="IrrigationPro",
+                sidebar_icon="mdi:sprinkler-variant",
+                frontend_url_path=DOMAIN,
+                config={"url": f"/{DOMAIN}/frontend/index.html"},
+                require_admin=False,
+            )
+            hass.data[f"{DOMAIN}_panel_registered"] = True
+
         _LOGGER.info("IrrigationPro setup completed successfully")
         return True
         
@@ -79,6 +102,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.data[DOMAIN]:
             for service_name in (SERVICE_START_ZONE, SERVICE_STOP_ZONE, SERVICE_RECALCULATE):
                 hass.services.async_remove(DOMAIN, service_name)
+            # Remove panel
+            hass.components.frontend.async_remove_panel(DOMAIN)
+            hass.data.pop(f"{DOMAIN}_panel_registered", None)
 
     return unload_ok
 

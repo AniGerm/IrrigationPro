@@ -1,0 +1,174 @@
+"""API endpoints for IrrigationPro panel."""
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from aiohttp import web
+from homeassistant.components.http import HomeAssistantView
+from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+
+from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class IrrigationProApiView(HomeAssistantView):
+    """API view for IrrigationPro status data."""
+
+    url = "/api/irrigationpro/status"
+    name = "api:irrigationpro:status"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return current status of all zones and weather."""
+        hass: HomeAssistant = request.app["hass"]
+
+        coordinators = hass.data.get(DOMAIN, {})
+        if not coordinators:
+            return self.json({"error": "No IrrigationPro instance configured"})
+
+        result: dict[str, Any] = {"entries": []}
+
+        for entry_id, coordinator in coordinators.items():
+            zones_data = []
+            for zone in coordinator.zones:
+                # Get actual entity state if configured
+                entity_state = None
+                if zone.switch_entity:
+                    state_obj = hass.states.get(zone.switch_entity)
+                    entity_state = state_obj.state if state_obj else "unknown"
+
+                zones_data.append(
+                    {
+                        "zone_id": zone.zone_id,
+                        "name": zone.name,
+                        "enabled": zone.enabled,
+                        "is_running": zone.is_running,
+                        "switch_entity": zone.switch_entity,
+                        "entity_state": entity_state,
+                        "duration": round(zone.duration, 1),
+                        "eto_total": round(zone.eto_total, 2),
+                        "rain_total": round(zone.rain_total, 2),
+                        "water_needed": round(zone.water_needed, 2),
+                        "area": zone.area,
+                        "flow_rate": zone.flow_rate,
+                        "emitter_count": zone.emitter_count,
+                        "efficiency": zone.efficiency,
+                        "crop_coef": zone.crop_coef,
+                        "max_duration": zone.max_duration,
+                        "rain_threshold": zone.rain_threshold,
+                        "adaptive": zone.adaptive,
+                        "last_run": (
+                            zone.last_run.isoformat() if zone.last_run else None
+                        ),
+                        "next_run": (
+                            zone.next_run.isoformat() if zone.next_run else None
+                        ),
+                        "weekdays": zone.weekdays,
+                    }
+                )
+
+            forecast_data = []
+            for day in coordinator.forecast:
+                forecast_data.append(
+                    {
+                        "date": day.sunrise.strftime("%Y-%m-%d"),
+                        "min_temp": round(day.min_temp, 1),
+                        "max_temp": round(day.max_temp, 1),
+                        "humidity": round(day.humidity),
+                        "wind_speed": round(day.wind_speed, 1),
+                        "rain": round(day.rain, 1),
+                        "eto": round(day.eto, 2),
+                        "condition": day.condition,
+                    }
+                )
+
+            entry_data = {
+                "entry_id": entry_id,
+                "zones": zones_data,
+                "forecast": forecast_data,
+                "scheduled_run": (
+                    coordinator.scheduled_run.isoformat()
+                    if coordinator.scheduled_run
+                    else None
+                ),
+                "last_update": (
+                    coordinator.last_update_success_time.isoformat()
+                    if coordinator.last_update_success_time
+                    else None
+                ),
+            }
+            result["entries"].append(entry_data)
+
+        return self.json(result)
+
+
+class IrrigationProZoneControlView(HomeAssistantView):
+    """API view to control zones."""
+
+    url = "/api/irrigationpro/zone/{action}"
+    name = "api:irrigationpro:zone_control"
+    requires_auth = True
+
+    async def post(self, request: web.Request, action: str) -> web.Response:
+        """Handle zone control actions."""
+        hass: HomeAssistant = request.app["hass"]
+        data = await request.json()
+
+        zone_id = data.get("zone_id")
+        duration = data.get("duration", 10)
+
+        if zone_id is None:
+            return self.json({"error": "zone_id required"}, status_code=400)
+
+        coordinators = hass.data.get(DOMAIN, {})
+
+        for coordinator in coordinators.values():
+            zone = next(
+                (z for z in coordinator.zones if z.zone_id == zone_id), None
+            )
+            if zone is None:
+                continue
+
+            if action == "start":
+                await coordinator.async_start_zone_manual(zone_id, duration)
+                return self.json({"status": "started", "zone_id": zone_id})
+            elif action == "stop":
+                await coordinator.async_stop_zone(zone_id)
+                return self.json({"status": "stopped", "zone_id": zone_id})
+            elif action == "toggle":
+                if zone.is_running:
+                    await coordinator.async_stop_zone(zone_id)
+                    return self.json({"status": "stopped", "zone_id": zone_id})
+                else:
+                    await coordinator.async_start_zone_manual(zone_id, duration)
+                    return self.json({"status": "started", "zone_id": zone_id})
+
+        return self.json({"error": f"Zone {zone_id} not found"}, status_code=404)
+
+
+class IrrigationProRecalculateView(HomeAssistantView):
+    """API view to trigger recalculation."""
+
+    url = "/api/irrigationpro/recalculate"
+    name = "api:irrigationpro:recalculate"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Trigger recalculation for all coordinators."""
+        hass: HomeAssistant = request.app["hass"]
+
+        coordinators = hass.data.get(DOMAIN, {})
+        for coordinator in coordinators.values():
+            await coordinator.async_request_refresh()
+
+        return self.json({"status": "recalculation_triggered"})
+
+
+def async_register_api(hass: HomeAssistant) -> None:
+    """Register API views."""
+    hass.http.register_view(IrrigationProApiView)
+    hass.http.register_view(IrrigationProZoneControlView)
+    hass.http.register_view(IrrigationProRecalculateView)

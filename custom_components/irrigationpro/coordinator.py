@@ -515,18 +515,59 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         zone.is_running = True
         zone.next_run = dt_util.now()
         
+        # Turn on the actual switch/valve entity
+        if zone.switch_entity:
+            try:
+                await self.hass.services.async_call(
+                    "homeassistant", "turn_on",
+                    {"entity_id": zone.switch_entity},
+                    blocking=True,
+                )
+                _LOGGER.info(
+                    "Turned ON entity '%s' for zone '%s'",
+                    zone.switch_entity, zone.name,
+                )
+            except Exception as err:
+                _LOGGER.error(
+                    "Failed to turn on entity '%s': %s",
+                    zone.switch_entity, err,
+                )
+                zone.is_running = False
+                self.async_set_updated_data(self.data)
+                return
+        else:
+            _LOGGER.warning("Zone '%s' has no switch entity configured", zone.name)
+        
         # Notify entities to update
         self.async_set_updated_data(self.data)
         
         # Wait for duration
-        await asyncio.sleep(zone.duration * 60)
-        
-        zone.is_running = False
-        
-        _LOGGER.info("Zone '%s' finished", zone.name)
-        
-        # Notify entities to update
-        self.async_set_updated_data(self.data)
+        try:
+            await asyncio.sleep(zone.duration * 60)
+        finally:
+            # Always turn off when done (even if cancelled)
+            if zone.switch_entity:
+                try:
+                    await self.hass.services.async_call(
+                        "homeassistant", "turn_off",
+                        {"entity_id": zone.switch_entity},
+                        blocking=True,
+                    )
+                    _LOGGER.info(
+                        "Turned OFF entity '%s' for zone '%s'",
+                        zone.switch_entity, zone.name,
+                    )
+                except Exception as err:
+                    _LOGGER.error(
+                        "Failed to turn off entity '%s': %s",
+                        zone.switch_entity, err,
+                    )
+            
+            zone.is_running = False
+            _LOGGER.info("Zone '%s' finished", zone.name)
+            
+            # Notify entities to update
+            self.async_set_updated_data(self.data)
 
     async def async_start_zone_manual(self, zone_id: int, duration: int):
         """Manually start a zone."""
