@@ -96,7 +96,9 @@ class IrrigationProApiView(HomeAssistantView):
                 ),
                 "last_update": (
                     coordinator.last_update_success_time.isoformat()
-                    if coordinator.last_update_success_time
+                    if hasattr(coordinator, "last_update_success_time") and coordinator.last_update_success_time
+                    else coordinator.last_updated.isoformat()
+                    if hasattr(coordinator, "last_updated") and coordinator.last_updated
                     else None
                 ),
             }
