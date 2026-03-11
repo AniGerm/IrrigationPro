@@ -89,6 +89,7 @@ class ZoneData:
         self.next_run: datetime | None = None
         self.last_run: datetime | None = None
         self.is_running = False
+        self.started_at: datetime | None = None  # When the zone was last started
         self.skip_reason: str = ""  # Why this zone is not scheduled
 
 
@@ -539,6 +540,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         )
         
         zone.is_running = True
+        zone.started_at = dt_util.now()
         zone.next_run = dt_util.now()
         
         # Turn on the actual switch/valve entity
@@ -590,6 +592,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     )
             
             zone.is_running = False
+            zone.started_at = None
             _LOGGER.info("Zone '%s' finished", zone.name)
             
             # Notify entities to update

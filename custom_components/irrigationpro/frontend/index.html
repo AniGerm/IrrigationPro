@@ -686,6 +686,7 @@
 
     let _lastData = null;
     let refreshTimer = null;
+    let _countdownInterval = null;
     const API_BASE = '/api/irrigationpro';
 
     // ── Auth ──────────────────────────────────────────────────────────────────
@@ -863,6 +864,35 @@
     }
 
     // ── Data loading ──────────────────────────────────────────────────────────
+    function _setRefreshInterval(ms) {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = setInterval(loadData, ms);
+    }
+
+    function _startCountdowns() {
+      if (_countdownInterval) clearInterval(_countdownInterval);
+      _countdownInterval = setInterval(() => {
+        const badges = document.querySelectorAll('[data-run-until]');
+        if (!badges.length) { clearInterval(_countdownInterval); _countdownInterval = null; return; }
+        let triggeredReload = false;
+        badges.forEach(el => {
+          const until = new Date(el.dataset.runUntil).getTime();
+          const remaining = Math.max(0, Math.round((until - Date.now()) / 1000));
+          const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+          const ss = String(remaining % 60).padStart(2, '0');
+          el.textContent = `⏱ ${mm}:${ss}`;
+          if (remaining <= 0 && !triggeredReload) {
+            triggeredReload = true;
+            setTimeout(loadData, 800); // slight delay so HA state has settled
+          }
+        });
+      }, 1000);
+    }
+
+    function _stopCountdowns() {
+      if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
+    }
+
     async function loadData() {
       try {
         const resp = await fetch(API_BASE + '/status', { headers: await authHeaders() });
@@ -883,11 +913,21 @@
 
         _consecutiveAuthErrors = 0;
         hideAuthBanner();
-        if (!refreshTimer) refreshTimer = setInterval(loadData, 30000);
 
         const data = await resp.json();
         _lastData = data;
         renderData(data);
+
+        // Adaptive polling: fast when zones are running, normal otherwise
+        const anyRunning = data.entries?.some(e => e.zones?.some(z => z.is_running));
+        if (anyRunning) {
+          _setRefreshInterval(5000);
+          _startCountdowns();
+        } else {
+          _stopCountdowns();
+          _setRefreshInterval(30000);
+        }
+
         document.getElementById('lastUpdate').textContent =
           t('header.auto_refresh', {time: new Date().toLocaleTimeString(lang === 'de' ? 'de-DE' : 'en-GB')});
 
@@ -934,6 +974,10 @@
       for (const zone of entry.zones) {
         const statusClass = !zone.enabled ? 'disabled' : zone.is_running ? 'running' : 'idle';
         const statusText = !zone.enabled ? t('zone.disabled') : zone.is_running ? t('zone.running') : t('zone.idle');
+        const runUntilAttr = (zone.is_running && zone.run_until)
+          ? ` data-run-until="${zone.run_until}"`
+          : '';
+        const statusBadge = `<span class="zone-status ${statusClass}" id="zstatus_${zone.zone_id}"${runUntilAttr}>${statusText}</span>`;
         const entityDot = zone.entity_state === 'on' ? 'on' : zone.entity_state === 'off' ? 'off' : 'unknown';
         const entityLabel = zone.switch_entity || t('entity.not_configured');
         const entityStateText = zone.entity_state === 'on' ? t('entity.on') : zone.entity_state === 'off' ? t('entity.off') : zone.entity_state || '?';
@@ -952,7 +996,7 @@
           <div class="card" id="zone_card_${zone.zone_id}">
             <div class="card-header">
               <span class="card-title">💧 ${zone.name}</span>
-              <span class="zone-status ${statusClass}">${statusText}</span>
+              ${statusBadge}
             </div>
             <div class="entity-state">
               <span class="dot ${entityDot}"></span>

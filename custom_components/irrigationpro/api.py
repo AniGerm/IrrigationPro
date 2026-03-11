@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from aiohttp import web
@@ -61,6 +62,11 @@ class IrrigationProApiView(HomeAssistantView):
                         "rain_threshold": zone.rain_threshold,
                         "adaptive": zone.adaptive,
                         "skip_reason": getattr(zone, "skip_reason", ""),
+                        "run_until": (
+                            (getattr(zone, "started_at", None) + timedelta(minutes=zone.duration)).isoformat()
+                            if getattr(zone, "started_at", None) and zone.duration > 0
+                            else None
+                        ),
                         "last_run": (
                             zone.last_run.isoformat() if zone.last_run else None
                         ),
