@@ -10,7 +10,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import CONF_PUSHOVER_ENABLED, CONF_PUSHOVER_USER_KEY, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -256,10 +256,56 @@ class IrrigationProHistoryView(HomeAssistantView):
         return self.json({"history": sorted_history})
 
 
-def async_register_api(hass: HomeAssistant) -> None:
+class IrrigationProTestNotificationView(HomeAssistantView):
+    """API view to send a test Pushover notification."""
+
+    url = "/api/irrigationpro/test_notification"
+    name = "api:irrigationpro:test_notification"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Send a test notification to verify Pushover token and priority."""
+        hass: HomeAssistant = request.app["hass"]
+        coordinators = hass.data.get(DOMAIN, {})
+        if not coordinators:
+            return self.json({"error": "Keine IrrigationPro-Instanz konfiguriert"}, status_code=404)
+
+        coordinator = next(iter(coordinators.values()))
+
+        if not coordinator.entry.data.get(CONF_PUSHOVER_ENABLED, False):
+            return self.json(
+                {"error": "Pushover ist in der Konfiguration deaktiviert. Bitte unter Optionen aktivieren."},
+                status_code=400,
+            )
+        if not coordinator.entry.data.get(CONF_PUSHOVER_USER_KEY):
+            return self.json(
+                {"error": "Kein Pushover User Key konfiguriert."},
+                status_code=400,
+            )
+
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+
+        priority = int(data.get("priority", 0))
+
+        try:
+            await coordinator._send_pushover_notification(
+                "\ud83d\udd14 IrrigationPro Test",
+                f"Test-Benachrichtigung erfolgreich! Priorit\u00e4t: {priority}",
+                priority=priority,
+            )
+            return self.json({"status": "sent", "priority": priority})
+        except Exception as err:
+            _LOGGER.error("test_notification error: %s", err)
+            return self.json({"error": str(err)}, status_code=500)
+
+
     """Register API views."""
     hass.http.register_view(IrrigationProApiView)
     hass.http.register_view(IrrigationProZoneControlView)
     hass.http.register_view(IrrigationProRecalculateView)
     hass.http.register_view(IrrigationProTestView)
+    hass.http.register_view(IrrigationProTestNotificationView)
     hass.http.register_view(IrrigationProHistoryView)

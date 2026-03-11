@@ -523,6 +523,23 @@
         <button class="btn btn-primary btn-sm" onclick="runTest('schedule')" data-i18n="test.schedule_btn">🔍 Plan simulieren</button>
         <div class="test-result hidden" id="scheduleResult"></div>
       </div>
+
+      <div class="modal-section">
+        <h3 data-i18n="test.pushover_title">🔔 Pushover-Test</h3>
+        <p data-i18n="test.pushover_desc">Sendet eine Testbenachrichtigung – ideal um Token und Priorität zu prüfen, ohne auf eine echte Bewässerung zu warten.</p>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+          <label data-i18n="test.pushover_priority">Priorität:</label>
+          <select id="testPushoverPriority" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text-primary);">
+            <option value="-2" data-i18n="test.prio_silent">-2 – Lautlos / keine Benachrichtigung</option>
+            <option value="-1" data-i18n="test.prio_low">-1 – Niedrig (kein Ton)</option>
+            <option value="0" selected data-i18n="test.prio_normal">0 – Normal</option>
+            <option value="1" data-i18n="test.prio_high">1 – Hoch (Ton, auch DND)</option>
+            <option value="2" data-i18n="test.prio_critical">2 – Kritisch (Wiederholung bis bestätigt)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runPushoverTest()" data-i18n="test.pushover_btn">🔔 Test senden</button>
+        <div class="test-result hidden" id="pushoverResult"></div>
+      </div>
     </div>
   </div>
 
@@ -655,6 +672,15 @@
         'test.schedule_title': 'Planungs-Test (Simulate)',
         'test.schedule_desc': 'Simuliert einen heißen, trockenen Sommertag (35°C, 0mm Regen) und zeigt was der Bewässerungsplan wäre – ohne echte Bewässerung.',
         'test.schedule_btn': '🔍 Plan simulieren',
+        'test.pushover_title': '🔔 Pushover-Test',
+        'test.pushover_desc': 'Sendet eine Testbenachrichtigung – ideal um Token und Priorität zu prüfen.',
+        'test.pushover_btn': '🔔 Test senden',
+        'test.pushover_priority': 'Priorität:',
+        'test.prio_silent': '-2 – Lautlos / keine Benachrichtigung',
+        'test.prio_low': '-1 – Niedrig (kein Ton)',
+        'test.prio_normal': '0 – Normal',
+        'test.prio_high': '1 – Hoch (Ton, auch DND)',
+        'test.prio_critical': '2 – Kritisch (Wiederholung bis bestätigt)',
         'test.running': '⏳ Test läuft…',
         'test.no_schedule': 'Kein Zeitplan nötig / kein Wasserbedarf',
         'test.would_start': 'Bewässerung würde starten:',
@@ -742,6 +768,15 @@
         'test.schedule_title': 'Schedule Test (Simulate)',
         'test.schedule_desc': 'Simulates a hot, dry summer day (35°C, 0mm rain) and shows what the irrigation schedule would be – without actual watering.',
         'test.schedule_btn': '🔍 Simulate Schedule',
+        'test.pushover_title': '🔔 Pushover Test',
+        'test.pushover_desc': 'Sends a test notification – great for verifying the token and experimenting with priorities.',
+        'test.pushover_btn': '🔔 Send Test',
+        'test.pushover_priority': 'Priority:',
+        'test.prio_silent': '-2 – Silent / no notification',
+        'test.prio_low': '-1 – Low (no sound)',
+        'test.prio_normal': '0 – Normal',
+        'test.prio_high': '1 – High (sound, override DND)',
+        'test.prio_critical': '2 – Critical (repeat until acknowledged)',
         'test.running': '⏳ Test running…',
         'test.no_schedule': 'No schedule needed / no water demand',
         'test.would_start': 'Watering would start:',
@@ -815,35 +850,50 @@
       try {
         const result = await Promise.race([
           hc,
-          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000))
         ]);
-        // result may be [auth, conn] (old) or just the connection object (new)
         const auth = Array.isArray(result)
           ? result[0]
           : result?.options?.auth ?? result?.auth;
         if (auth && typeof auth.getAccessToken === 'function') return auth;
-      } catch(e) { console.debug('[IrrPro] hassConnection try failed:', e.message); }
+      } catch(e) { console.debug('[IrrPro] hassConnection failed:', e.message); }
       return null;
     }
 
     async function _resolveAuth() {
-      // 1) Current frame – some HA versions inject hassConnection here directly
-      let auth = await _tryHassConnection(window);
-      if (auth) return auth;
+      const parent = (window.parent && window.parent !== window) ? window.parent : null;
 
-      // 2) Parent frame (standard same-origin iframe in HA frontend)
-      if (window.parent && window.parent !== window) {
-        auth = await _tryHassConnection(window.parent);
-        if (auth) return auth;
-
-        // 3) <home-assistant> element in parent DOM
+      // 1) Poll for <home-assistant> element — the most reliable path in a
+      //    same-origin HA panel iframe. Polls with 250 ms gap (≤ 3.5 s total)
+      //    to cover the rare case where hass is set slightly after iframe load.
+      for (let i = 0; i < 15; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 250));
         try {
-          const ha = window.parent.document.querySelector('home-assistant');
+          const ctx = parent ?? window;
+          const ha = ctx.document.querySelector('home-assistant');
           if (ha?.hass?.auth?.getAccessToken) return ha.hass.auth;
-        } catch(e) { console.debug('[IrrPro] ha-element:', e.message); }
+        } catch(e) {
+          if (i === 0) console.debug('[IrrPro] ha-element:', e.message);
+          break; // cross-origin – stop polling
+        }
       }
 
-      // 4) Manually stored long-lived token (set via the auth-error banner)
+      // 2) hassConnection WebSocket path (short timeout)
+      {
+        const auth = await _tryHassConnection(parent ?? window);
+        if (auth) return auth;
+      }
+
+      // 3) hassTokens in localStorage (HA frontend keeps the access token here)
+      try {
+        const tok = JSON.parse(localStorage.getItem('hassTokens') || 'null');
+        if (tok?.access_token) {
+          // Use even if slightly expired – a 401 will surface the auth banner
+          return { getAccessToken: async () => tok.access_token, _hassTokens: true };
+        }
+      } catch(e) {}
+
+      // 4) Manually stored long-lived token (entered via auth-error banner)
       const manual = localStorage.getItem('irrigationpro_token');
       if (manual) return { getAccessToken: async () => manual, _manual: true };
 
@@ -851,32 +901,17 @@
     }
 
     async function getAccessToken() {
-      // Re-use cached auth (handles expiry / refresh internally)
       if (_auth) {
         try { return await _auth.getAccessToken(); }
         catch(e) { _auth = null; _authPromise = null; }
       }
-
       if (!_authPromise) _authPromise = _resolveAuth();
       _auth = await _authPromise;
-      _authPromise = null; // reset so future calls can retry if auth was null
-
+      _authPromise = null;
       if (_auth) {
         try { return await _auth.getAccessToken(); }
         catch(e) { _auth = null; return null; }
       }
-
-      // 4) localStorage hassTokens – only use if not expired
-      try {
-        const raw = localStorage.getItem('hassTokens');
-        if (raw) {
-          const tok = JSON.parse(raw);
-          if (tok.access_token && (tok.expires_at || 0) > (Date.now() / 1000 + 60)) {
-            return tok.access_token;
-          }
-        }
-      } catch(e) {}
-
       return null;
     }
 
@@ -1225,10 +1260,38 @@
       });
       document.getElementById('relayResult').classList.add('hidden');
       document.getElementById('scheduleResult').classList.add('hidden');
+      document.getElementById('pushoverResult').classList.add('hidden');
     }
 
     function closeTestModal() {
       document.getElementById('testModal').classList.remove('open');
+    }
+
+    async function runPushoverTest() {
+      const priority = parseInt(document.getElementById('testPushoverPriority').value, 10);
+      const resultEl = document.getElementById('pushoverResult');
+      resultEl.classList.remove('hidden');
+      resultEl.style.color = 'var(--text-secondary)';
+      resultEl.textContent = '⏳ ' + t('test.running');
+      try {
+        const resp = await fetch(API_BASE + '/test_notification', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ priority })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json();
+        if (resp.ok && data.status === 'sent') {
+          resultEl.style.color = 'var(--success)';
+          resultEl.textContent = '✅ Gesendet! Priorität ' + priority;
+        } else {
+          resultEl.style.color = 'var(--danger)';
+          resultEl.textContent = '❌ ' + (data.error || 'Fehler');
+        }
+      } catch(e) {
+        resultEl.style.color = 'var(--danger)';
+        resultEl.textContent = '❌ Netzwerkfehler: ' + e.message;
+      }
     }
 
     async function runTest(mode) {
