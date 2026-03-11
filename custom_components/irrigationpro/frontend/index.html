@@ -889,9 +889,14 @@
     }
 
     // Resets the auth cache so next request tries fresh (called after 401)
-    function resetAuth() {
+    // If a manually stored token is also rejected, remove it so the banner
+    // prompts the user to enter a new one instead of retrying infinitely.
+    function resetAuth(clearManualToken = false) {
       _auth = null;
       _authPromise = null;
+      if (clearManualToken) {
+        localStorage.removeItem('irrigationpro_token');
+      }
     }
 
     // ── Auth-Error Banner ────────────────────────────────────────────────────
@@ -1011,8 +1016,11 @@
 
         if (resp.status === 401) {
           _consecutiveAuthErrors++;
-          resetAuth();
-          if (_consecutiveAuthErrors >= 2) {
+          // If the manual localStorage token itself is invalid, purge it immediately
+          // so the banner lets the user enter a fresh one.
+          const hadManualToken = !!localStorage.getItem('irrigationpro_token');
+          resetAuth(hadManualToken);
+          if (_consecutiveAuthErrors >= 2 || hadManualToken) {
             clearInterval(refreshTimer);
             refreshTimer = null;
             showAuthBanner();
