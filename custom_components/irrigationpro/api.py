@@ -272,11 +272,6 @@ class IrrigationProTestNotificationView(HomeAssistantView):
 
         coordinator = next(iter(coordinators.values()))
 
-        if not coordinator.entry.data.get(CONF_PUSHOVER_ENABLED, False):
-            return self.json(
-                {"error": "Pushover ist in der Konfiguration deaktiviert. Bitte unter Optionen aktivieren."},
-                status_code=400,
-            )
         if not coordinator.entry.data.get(CONF_PUSHOVER_USER_KEY):
             return self.json(
                 {"error": "Kein Pushover User Key konfiguriert."},
@@ -295,6 +290,7 @@ class IrrigationProTestNotificationView(HomeAssistantView):
                 "\ud83d\udd14 IrrigationPro Test",
                 f"Test-Benachrichtigung erfolgreich! Priorit\u00e4t: {priority}",
                 priority=priority,
+                force=True,
             )
             return self.json({"status": "sent", "priority": priority})
         except Exception as err:

@@ -907,10 +907,14 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         await self._storage.async_save(data)
 
     async def _send_pushover_notification(
-        self, title: str, message: str, priority: int = 0
+        self,
+        title: str,
+        message: str,
+        priority: int = 0,
+        force: bool = False,
     ):
         """Send notification via the configured HA notify service."""
-        if not self.entry.data.get(CONF_PUSHOVER_ENABLED, False):
+        if not force and not self.entry.data.get(CONF_PUSHOVER_ENABLED, False):
             return
 
         user_key = self.entry.data.get(CONF_PUSHOVER_USER_KEY)
