@@ -948,7 +948,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, data=payload) as resp:
+                async with session.post(api_url, json=payload) as resp:
                     if resp.status == 200:
                         result = await resp.json()
                         if result.get("status") == 1:
