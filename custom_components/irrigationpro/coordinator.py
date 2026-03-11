@@ -89,6 +89,7 @@ class ZoneData:
         self.next_run: datetime | None = None
         self.last_run: datetime | None = None
         self.is_running = False
+        self.skip_reason: str = ""  # Why this zone is not scheduled
 
 
 class SmartIrrigationCoordinator(DataUpdateCoordinator):
@@ -110,8 +111,10 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._schedule_timer = None
         self._recheck_timer = None
         self._watering_task = None
+        self._manual_zone_tasks: dict[int, asyncio.Task] = {}
         self._storage: Store | None = None
         self._schedule_checker_unsub = None
+        self.schedule_reason: str = ""  # Why no watering is scheduled
         
         # Validate configuration
         if not entry.data.get(CONF_WEATHER_ENTITY):
@@ -276,6 +279,10 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 forecast_day.max_temp,
             )
             self.scheduled_run = None
+            self.schedule_reason = (
+                f"Temperatur zu niedrig (min: {forecast_day.min_temp:.1f}°C, "
+                f"max: {forecast_day.max_temp:.1f}°C – Schwelle: {low_threshold}/{high_threshold}°C)"
+            )
             return
         
         # Recalculate durations for the selected day
@@ -295,6 +302,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         if total_duration == 0:
             _LOGGER.info("No watering needed")
             self.scheduled_run = None
+            self.schedule_reason = "Kein Bewässerungsbedarf (ETo durch Regen gedeckt oder kein aktiver Bewässerungstag)"
             return
         
         # Calculate start and end times
@@ -303,6 +311,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         end_time = start_time + timedelta(minutes=total_duration)
         
         self.scheduled_run = start_time
+        self.schedule_reason = ""
         
         _LOGGER.info(
             "Watering scheduled: Start=%s, End=%s, Duration=%.1f min",
@@ -324,6 +333,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     ) -> float:
         """Calculate watering duration for a zone in minutes."""
         if not zone.enabled:
+            zone.skip_reason = "Zone deaktiviert"
             return 0
         
         # Check if this is a valid watering day
@@ -331,13 +341,20 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         weekday = WEEKDAYS[forecast_day.sunrise.weekday()]
         month = forecast_day.sunrise.month
         
-        if weekday not in zone.weekdays or month not in zone.months:
+        if weekday not in zone.weekdays:
             _LOGGER.debug("Zone '%s': Not scheduled for this day", zone.name)
+            zone.skip_reason = f"Kein Bewässerungstag ({weekday})"
+            return 0
+        
+        if month not in zone.months:
+            _LOGGER.debug("Zone '%s': Not scheduled for this month", zone.name)
+            zone.skip_reason = "Kein Bewässerungsmonat"
             return 0
         
         if not zone.adaptive:
             # Non-adaptive mode: use default duration
             _LOGGER.debug("Zone '%s': Non-adaptive, using default", zone.name)
+            zone.skip_reason = ""
             return zone.max_duration / 2  # Use half of max as default
         
         # Calculate days until next watering
@@ -380,6 +397,10 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     zone.name,
                     self.forecast[day_index].rain,
                 )
+                zone.skip_reason = (
+                    f"Regenschwelle überschritten "
+                    f"({self.forecast[day_index].rain:.1f} mm >= {zone.rain_threshold} mm)"
+                )
                 return 0
         
         # Apply crop and zone factors
@@ -415,6 +436,11 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 zone.max_duration,
             )
             duration = zone.max_duration
+        
+        if duration == 0:
+            zone.skip_reason = "Kein Wasserbedarf (ETo durch Regen gedeckt)"
+        else:
+            zone.skip_reason = ""
         
         _LOGGER.debug(
             "Zone '%s': ETo=%.2f mm, Rain=%.2f mm, Water needed=%.2f L, Duration=%.1f min",
@@ -570,14 +596,22 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             self.async_set_updated_data(self.data)
 
     async def async_start_zone_manual(self, zone_id: int, duration: int):
-        """Manually start a zone."""
+        """Manually start a zone (non-blocking)."""
         zone = next((z for z in self.zones if z.zone_id == zone_id), None)
         if not zone:
             raise ValueError(f"Zone {zone_id} not found")
         
+        # Cancel existing manual task for this zone if any
+        if zone_id in self._manual_zone_tasks:
+            existing = self._manual_zone_tasks.pop(zone_id)
+            if not existing.done():
+                existing.cancel()
+        
         _LOGGER.info("Manual start of zone '%s' for %d minutes", zone.name, duration)
         zone.duration = duration
-        await self._water_zone(zone)
+        # Run in background so the API can respond immediately
+        task = asyncio.create_task(self._water_zone(zone))
+        self._manual_zone_tasks[zone_id] = task
 
     async def async_stop_zone(self, zone_id: int):
         """Stop a running zone."""
@@ -585,11 +619,21 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         if not zone:
             raise ValueError(f"Zone {zone_id} not found")
         
+        # Cancel the background task – its finally-block will turn off the entity
+        if zone_id in self._manual_zone_tasks:
+            task = self._manual_zone_tasks.pop(zone_id)
+            if not task.done():
+                task.cancel()
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
+        
         if zone.is_running:
             _LOGGER.info("Stopping zone '%s'", zone.name)
             zone.is_running = False
             
-            # Turn off the actual switch/valve entity
+            # Turn off the actual switch/valve entity (safety fallback)
             if zone.switch_entity:
                 try:
                     await self.hass.services.async_call(
@@ -602,6 +646,19 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     _LOGGER.error("Failed to turn off entity '%s': %s", zone.switch_entity, err)
             
             self.async_set_updated_data(self.data)
+
+    async def async_set_zone_enabled(self, zone_id: int, enabled: bool) -> None:
+        """Enable or disable a zone and recalculate schedule."""
+        zone = next((z for z in self.zones if z.zone_id == zone_id), None)
+        if not zone:
+            raise ValueError(f"Zone {zone_id} not found")
+        
+        zone.enabled = enabled
+        _LOGGER.info("Zone '%s' %s", zone.name, "aktiviert" if enabled else "deaktiviert")
+        
+        if self.forecast:
+            await self._async_calculate_schedule()
+        self.async_set_updated_data(self.data)
 
     async def _async_load_storage(self):
         """Load stored data."""

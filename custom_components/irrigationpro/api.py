@@ -60,6 +60,7 @@ class IrrigationProApiView(HomeAssistantView):
                         "max_duration": zone.max_duration,
                         "rain_threshold": zone.rain_threshold,
                         "adaptive": zone.adaptive,
+                        "skip_reason": getattr(zone, "skip_reason", ""),
                         "last_run": (
                             zone.last_run.isoformat() if zone.last_run else None
                         ),
@@ -94,6 +95,7 @@ class IrrigationProApiView(HomeAssistantView):
                     if coordinator.scheduled_run
                     else None
                 ),
+                "schedule_reason": getattr(coordinator, "schedule_reason", ""),
                 "last_update": (
                     coordinator.last_update_success_time.isoformat()
                     if hasattr(coordinator, "last_update_success_time") and coordinator.last_update_success_time
@@ -147,6 +149,12 @@ class IrrigationProZoneControlView(HomeAssistantView):
                 else:
                     await coordinator.async_start_zone_manual(zone_id, duration)
                     return self.json({"status": "started", "zone_id": zone_id})
+            elif action == "enable":
+                await coordinator.async_set_zone_enabled(zone_id, True)
+                return self.json({"status": "enabled", "zone_id": zone_id})
+            elif action == "disable":
+                await coordinator.async_set_zone_enabled(zone_id, False)
+                return self.json({"status": "disabled", "zone_id": zone_id})
 
         return self.json({"error": f"Zone {zone_id} not found"}, status_code=404)
 

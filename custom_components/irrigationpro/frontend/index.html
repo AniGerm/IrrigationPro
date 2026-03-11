@@ -415,23 +415,47 @@
     let refreshTimer;
     const API_BASE = '/api/irrigationpro';
 
-    function getAuthHeaders() {
-      const token = localStorage.getItem('hassTokens');
-      let accessToken = '';
-      if (token) {
-        try {
-          const parsed = JSON.parse(token);
-          accessToken = parsed.access_token || '';
-        } catch(e) {}
-      }
-      // Fallback: try to get from parent HA frame
-      if (!accessToken && window.parent && window.parent.hassConnection) {
-        try {
-          accessToken = window.parent.hassConnection.auth.accessToken;
-        } catch(e) {}
-      }
+    // Get auth token reliably from parent HA frame (same-origin iframe)
+    async function getAccessToken() {
+      // Method 1: Access live hass object from parent window (best option)
+      try {
+        if (window.parent && window.parent !== window) {
+          const ha = window.parent.document.querySelector('home-assistant');
+          if (ha && ha.hass && ha.hass.auth) {
+            return await ha.hass.auth.getAccessToken();
+          }
+        }
+      } catch(e) { /* cross-origin or element not found */ }
+
+      // Method 2: Parse localStorage (same origin – token might be slightly stale)
+      try {
+        const stored = localStorage.getItem('hassTokens');
+        if (stored) {
+          const data = JSON.parse(stored);
+          if (data.access_token) return data.access_token;
+        }
+      } catch(e) {}
+
+      // Method 3: Try hassConnection options
+      try {
+        if (window.parent && window.parent.hassConnection) {
+          const conn = await window.parent.hassConnection;
+          const auth = Array.isArray(conn) ? conn[0] : conn.options?.auth;
+          if (auth) {
+            if (typeof auth.getAccessToken === 'function') return await auth.getAccessToken();
+            if (auth.data?.access_token) return auth.data.access_token;
+          }
+        }
+      } catch(e) {}
+
+      return '';
+    }
+
+    async function authHeaders() {
+      const token = await getAccessToken();
+      if (!token) console.warn('IrrigationPro: No HA auth token found – API calls may fail with 401');
       return {
-        'Authorization': 'Bearer ' + accessToken,
+        'Authorization': 'Bearer ' + token,
         'Content-Type': 'application/json'
       };
     }
@@ -477,8 +501,8 @@
 
     async function loadData() {
       try {
-        const resp = await fetch(API_BASE + '/status', { headers: getAuthHeaders() });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const resp = await fetch(API_BASE + '/status', { headers: await authHeaders() });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status + (resp.status === 401 ? ' (Kein Auth-Token)' : ''));
         const data = await resp.json();
         renderData(data);
         document.getElementById('lastUpdate').textContent =
@@ -506,6 +530,21 @@
       document.getElementById('dataUpdate').textContent =
         entry.last_update ? formatDate(entry.last_update) : '--';
 
+      // Show reason why no schedule
+      let scheduleReasonEl = document.getElementById('scheduleReason');
+      if (!scheduleReasonEl) {
+        scheduleReasonEl = document.createElement('div');
+        scheduleReasonEl.id = 'scheduleReason';
+        scheduleReasonEl.style.cssText = 'font-size:13px;color:var(--text-secondary);margin-top:6px;padding:8px 12px;background:rgba(244,67,54,0.07);border-radius:8px;display:none;';
+        document.getElementById('statusBar').after(scheduleReasonEl);
+      }
+      if (!entry.scheduled_run && entry.schedule_reason) {
+        scheduleReasonEl.textContent = 'ℹ️ ' + entry.schedule_reason;
+        scheduleReasonEl.style.display = 'block';
+      } else {
+        scheduleReasonEl.style.display = 'none';
+      }
+
       // Zone cards
       let html = '';
       for (const zone of entry.zones) {
@@ -514,9 +553,15 @@
         const entityDot = zone.entity_state === 'on' ? 'on' : zone.entity_state === 'off' ? 'off' : 'unknown';
         const entityLabel = zone.switch_entity || 'Nicht konfiguriert';
         const entityStateText = zone.entity_state === 'on' ? 'EIN' : zone.entity_state === 'off' ? 'AUS' : zone.entity_state || '?';
+        const skipReasonHtml = (!zone.is_running && zone.skip_reason)
+          ? `<div style="font-size:12px;color:var(--text-secondary);background:rgba(255,152,0,0.1);border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ ${zone.skip_reason}</div>`
+          : '';
+        const toggleBtn = zone.enabled
+          ? `<button class="btn btn-sm" style="background:rgba(244,67,54,0.15);color:var(--danger)" onclick="toggleZoneEnabled(${zone.zone_id}, false)">⏸ Deaktivieren</button>`
+          : `<button class="btn btn-sm" style="background:rgba(76,175,80,0.15);color:var(--success)" onclick="toggleZoneEnabled(${zone.zone_id}, true)">✓ Aktivieren</button>`;
 
         html += `
-          <div class="card">
+          <div class="card" id="zone_card_${zone.zone_id}">
             <div class="card-header">
               <span class="card-title">💧 ${zone.name}</span>
               <span class="zone-status ${statusClass}">${statusText}</span>
@@ -528,10 +573,12 @@
               <strong>${entityStateText}</strong>
             </div>
 
+            ${skipReasonHtml}
+
             <div class="info-grid">
               <div class="info-item">
                 <span class="info-label">Dauer</span>
-                <span class="info-value">${zone.duration} min</span>
+                <span class="info-value">${zone.duration > 0 ? zone.duration + ' min' : '–'}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">ETo gesamt</span>
@@ -565,10 +612,11 @@
 
             <div class="card-actions">
               ${zone.is_running
-                ? `<button class="btn btn-danger btn-sm" onclick="controlZone(${zone.zone_id}, 'stop')">⏹ Stopp</button>`
-                : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" value="${zone.duration || 10}" min="1" max="180" title="Minuten">
-                   <button class="btn btn-success btn-sm" onclick="controlZone(${zone.zone_id}, 'start')" ${!zone.enabled ? 'disabled' : ''}>▶ Start</button>`
+                ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'stop')">⏹ Stopp</button>`
+                : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" value="${zone.duration > 0 ? Math.round(zone.duration) : 10}" min="1" max="180" title="Minuten">
+                   <button class="btn btn-success btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'start')" ${!zone.enabled ? 'disabled title="Zone deaktiviert"' : ''}>▶ Start</button>`
               }
+              ${toggleBtn}
             </div>
           </div>
         `;
@@ -605,13 +653,20 @@
     }
 
     async function controlZone(zoneId, action) {
-      const duration = document.getElementById('dur_' + zoneId);
-      const dur = duration ? parseInt(duration.value, 10) || 10 : 10;
+      const durationEl = document.getElementById('dur_' + zoneId);
+      const dur = durationEl ? parseInt(durationEl.value, 10) || 10 : 10;
+      const btn = document.getElementById('btn_' + zoneId);
+
+      // Visual loading state
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = action === 'start' ? '⏳ Startet…' : '⏳ Stoppt…';
+      }
 
       try {
         const resp = await fetch(API_BASE + '/zone/' + action, {
           method: 'POST',
-          headers: getAuthHeaders(),
+          headers: await authHeaders(),
           body: JSON.stringify({ zone_id: zoneId, duration: dur })
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -620,9 +675,29 @@
           action === 'start' ? `Zone ${zoneId} gestartet (${dur} min)` : `Zone ${zoneId} gestoppt`,
           'success'
         );
-        setTimeout(loadData, 1000);
+        // Refresh data to show new state (zone card re-renders)
+        setTimeout(loadData, 800);
+      } catch(err) {
+        if (btn) { btn.disabled = false; btn.textContent = action === 'start' ? '▶ Start' : '⏹ Stopp'; }
+        showToast('Fehler: ' + err.message, 'error');
+        console.error('controlZone error:', err);
+      }
+    }
+
+    async function toggleZoneEnabled(zoneId, enable) {
+      const action = enable ? 'enable' : 'disable';
+      try {
+        const resp = await fetch(API_BASE + '/zone/' + action, {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ zone_id: zoneId })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        showToast(enable ? `Zone ${zoneId} aktiviert` : `Zone ${zoneId} deaktiviert`, 'success');
+        setTimeout(loadData, 500);
       } catch(err) {
         showToast('Fehler: ' + err.message, 'error');
+        console.error('toggleZoneEnabled error:', err);
       }
     }
 
@@ -630,7 +705,7 @@
       try {
         const resp = await fetch(API_BASE + '/recalculate', {
           method: 'POST',
-          headers: getAuthHeaders()
+          headers: await authHeaders()
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         showToast('Neuberechnung gestartet', 'success');
