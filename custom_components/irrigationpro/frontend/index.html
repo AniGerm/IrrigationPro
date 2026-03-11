@@ -57,7 +57,7 @@
       gap: 8px;
     }
 
-    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
     .btn {
       padding: 8px 16px;
@@ -407,21 +407,18 @@
     .test-result .result-zone:last-child { border-bottom: none; }
     .result-skip { color: var(--text-secondary); font-style: italic; }
 
-    /* Floating test button */
-    .fab-test {
-      position: fixed; bottom: 24px; right: 24px;
-      width: 48px; height: 48px;
-      border-radius: 50%;
+    .btn-test {
       background: var(--card-bg);
-      border: 2px solid var(--border);
-      font-size: 22px;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 18px;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 200;
-      transition: transform 0.2s, box-shadow 0.2s;
+      line-height: 1;
+      transition: background 0.2s;
     }
-    .fab-test:hover { transform: scale(1.12); box-shadow: 0 6px 20px rgba(0,0,0,0.28); }
+    .btn-test:hover { background: rgba(255,152,0,0.15); border-color: var(--warning); }
 
     .duration-input {
       width: 60px;
@@ -465,13 +462,11 @@
     </div>
   </div>
 
-  <!-- Floating test button -->
-  <button class="fab-test" onclick="openTestModal()" title="Test-Modus">🧪</button>
-
   <div class="header">
     <h1>🌿 IrrigationPro Dashboard</h1>
     <div class="header-actions">
       <span class="auto-refresh" id="lastUpdate">--</span>
+      <button class="btn-test" onclick="openTestModal()" title="Test-Modus">🧪</button>
       <button class="btn-lang" onclick="toggleLang()" id="langBtn">EN</button>
       <button class="btn btn-primary btn-sm" onclick="recalculate()">
         <span data-i18n="header.recalculate">🔄 Neu berechnen</span>
@@ -700,35 +695,44 @@
     let _authPromise = null;
     let _consecutiveAuthErrors = 0;
 
-    async function _resolveAuth() {
-      // Try window.parent (same-origin iframe inside HA frontend)
-      if (window.parent && window.parent !== window) {
-        // 1) hassConnection – Promise<[auth, conn]> set by HA frontend
-        try {
-          const hc = window.parent.hassConnection;
-          if (hc && typeof hc.then === 'function') {
-            const result = await Promise.race([
-              hc,
-              new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000))
-            ]);
-            const auth = Array.isArray(result) ? result[0] : result?.options?.auth;
-            if (auth && typeof auth.getAccessToken === 'function') return auth;
-          }
-        } catch(e) { console.debug('[IrrPro] hassConnection:', e.message); }
+    // Tries to extract the HA auth object from a hassConnection Promise
+    async function _tryHassConnection(win) {
+      const hc = win?.hassConnection;
+      if (!hc || typeof hc.then !== 'function') return null;
+      try {
+        const result = await Promise.race([
+          hc,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+        ]);
+        // result may be [auth, conn] (old) or just the connection object (new)
+        const auth = Array.isArray(result)
+          ? result[0]
+          : result?.options?.auth ?? result?.auth;
+        if (auth && typeof auth.getAccessToken === 'function') return auth;
+      } catch(e) { console.debug('[IrrPro] hassConnection try failed:', e.message); }
+      return null;
+    }
 
-        // 2) <home-assistant> element in parent DOM
+    async function _resolveAuth() {
+      // 1) Current frame – some HA versions inject hassConnection here directly
+      let auth = await _tryHassConnection(window);
+      if (auth) return auth;
+
+      // 2) Parent frame (standard same-origin iframe in HA frontend)
+      if (window.parent && window.parent !== window) {
+        auth = await _tryHassConnection(window.parent);
+        if (auth) return auth;
+
+        // 3) <home-assistant> element in parent DOM
         try {
           const ha = window.parent.document.querySelector('home-assistant');
           if (ha?.hass?.auth?.getAccessToken) return ha.hass.auth;
         } catch(e) { console.debug('[IrrPro] ha-element:', e.message); }
       }
 
-      // 3) Manually stored long-lived token (set via the auth-error banner)
+      // 4) Manually stored long-lived token (set via the auth-error banner)
       const manual = localStorage.getItem('irrigationpro_token');
-      if (manual) {
-        // Wrap as minimal auth object
-        return { getAccessToken: async () => manual, _manual: true };
-      }
+      if (manual) return { getAccessToken: async () => manual, _manual: true };
 
       return null;
     }
@@ -742,10 +746,11 @@
 
       if (!_authPromise) _authPromise = _resolveAuth();
       _auth = await _authPromise;
+      _authPromise = null; // reset so future calls can retry if auth was null
 
       if (_auth) {
         try { return await _auth.getAccessToken(); }
-        catch(e) { _auth = null; _authPromise = null; return null; }
+        catch(e) { _auth = null; return null; }
       }
 
       // 4) localStorage hassTokens – only use if not expired
