@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.frontend import async_register_built_in_panel, async_remove_panel
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -64,7 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
             # Register panel in sidebar
-            hass.components.frontend.async_register_built_in_panel(
+            async_register_built_in_panel(
+                hass,
                 component_name="iframe",
                 sidebar_title="IrrigationPro",
                 sidebar_icon="mdi:sprinkler-variant",
@@ -104,7 +106,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             for service_name in (SERVICE_START_ZONE, SERVICE_STOP_ZONE, SERVICE_RECALCULATE):
                 hass.services.async_remove(DOMAIN, service_name)
             # Remove panel
-            hass.components.frontend.async_remove_panel(DOMAIN)
+            async_remove_panel(hass, DOMAIN)
             hass.data.pop(f"{DOMAIN}_panel_registered", None)
 
     return unload_ok
