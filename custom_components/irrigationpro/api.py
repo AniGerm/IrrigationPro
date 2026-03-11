@@ -102,6 +102,16 @@ class IrrigationProApiView(HomeAssistantView):
                     else None
                 ),
                 "schedule_reason": getattr(coordinator, "schedule_reason", ""),
+                "recheck_scheduled": (
+                    coordinator.recheck_scheduled.isoformat()
+                    if getattr(coordinator, "recheck_scheduled", None)
+                    else None
+                ),
+                "last_calculated": (
+                    coordinator.last_calculated.isoformat()
+                    if getattr(coordinator, "last_calculated", None)
+                    else None
+                ),
                 "last_update": (
                     coordinator.last_update_success_time.isoformat()
                     if hasattr(coordinator, "last_update_success_time") and coordinator.last_update_success_time

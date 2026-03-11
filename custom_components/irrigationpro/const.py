@@ -36,6 +36,9 @@ CONF_PUSHOVER_ENABLED: Final = "pushover_enabled"
 CONF_PUSHOVER_USER_KEY: Final = "pushover_user_key"
 CONF_PUSHOVER_DEVICE: Final = "pushover_device"
 CONF_PUSHOVER_PRIORITY: Final = "pushover_priority"
+CONF_NOTIFY_SERVICE: Final = "notify_service"  # HA notify service name (e.g. 'pushover')
+CONF_DAILY_REPORT_ENABLED: Final = "daily_report_enabled"
+CONF_DAILY_REPORT_HOUR: Final = "daily_report_hour"
 
 # Solar radiation (monthly average kWh/day)
 CONF_SOLAR_RADIATION: Final = "solar_radiation"
@@ -52,6 +55,9 @@ DEFAULT_HIGH_THRESHOLD: Final = 15
 DEFAULT_RECHECK_TIME: Final = 0
 DEFAULT_PUSHOVER_ENABLED: Final = False
 DEFAULT_PUSHOVER_PRIORITY: Final = 0
+DEFAULT_NOTIFY_SERVICE: Final = "pushover"
+DEFAULT_DAILY_REPORT_ENABLED: Final = False
+DEFAULT_DAILY_REPORT_HOUR: Final = 7
 DEFAULT_ZONE_AREA: Final = 10.0
 DEFAULT_ZONE_FLOW_RATE: Final = 2.0
 DEFAULT_ZONE_EFFICIENCY: Final = 90

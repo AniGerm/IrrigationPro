@@ -468,6 +468,8 @@
     .hist-meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--text-secondary); }
     .hist-meta span { display: flex; align-items: center; gap: 3px; }
     .hist-reason { font-size: 12px; color: var(--warning); margin-top: 4px; }
+    .schedule-info { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 4px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+    .schedule-info span { white-space: nowrap; }
 
     .btn-test {
       background: var(--card-bg);
@@ -611,7 +613,9 @@
         'zone.area': 'Fläche',
         'zone.efficiency': 'Effizienz',
         'zone.last_run': 'Letzter Lauf',
-        'zone.next_run': 'Nächster Lauf',
+        'zone.next_sched': 'Nächste Bewässerung',
+        'zone.last_calc': 'Letzte Berechnung',
+        'zone.recheck': 'Nächster Recheck',
         'btn.stop': '⏹ Stopp',
         'btn.start': '▶ Start',
         'btn.disable': '⏸ Deaktivieren',
@@ -696,7 +700,9 @@
         'zone.area': 'Area',
         'zone.efficiency': 'Efficiency',
         'zone.last_run': 'Last Run',
-        'zone.next_run': 'Next Run',
+        'zone.next_sched': 'Next Watering',
+        'zone.last_calc': 'Last Calculation',
+        'zone.recheck': 'Next Recheck',
         'btn.stop': '⏹ Stop',
         'btn.start': '▶ Start',
         'btn.disable': '⏸ Disable',
@@ -1118,7 +1124,11 @@
               <div class="info-item"><span class="info-label">${t('zone.area')}</span><span class="info-value">${zone.area} m²</span></div>
               <div class="info-item"><span class="info-label">${t('zone.efficiency')}</span><span class="info-value">${zone.efficiency}%</span></div>
               <div class="info-item"><span class="info-label">${t('zone.last_run')}</span><span class="info-value">${zone.last_run ? formatDate(zone.last_run) : '--'}</span></div>
-              <div class="info-item"><span class="info-label">${t('zone.next_run')}</span><span class="info-value">${zone.next_run ? formatDate(zone.next_run) : '--'}</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.next_sched')}</span><span class="info-value">${(zone.enabled && zone.duration > 0 && entry.scheduled_run) ? formatDate(entry.scheduled_run) : '--'}</span></div>
+            </div>
+            <div class="schedule-info">
+              <span>🔄 ${t('zone.last_calc')}: ${entry.last_calculated ? formatDate(entry.last_calculated) : '--'}</span>
+              ${entry.recheck_scheduled ? `<span>🔍 ${t('zone.recheck')}: ${formatDate(entry.recheck_scheduled)}</span>` : ''}
             </div>
             <div class="card-actions">${startStopBtn}${toggleBtn}</div>
           </div>`;

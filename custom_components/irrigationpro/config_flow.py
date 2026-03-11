@@ -19,6 +19,9 @@ from .const import (
     CONF_PUSHOVER_ENABLED,
     CONF_PUSHOVER_PRIORITY,
     CONF_PUSHOVER_USER_KEY,
+    CONF_NOTIFY_SERVICE,
+    CONF_DAILY_REPORT_ENABLED,
+    CONF_DAILY_REPORT_HOUR,
     CONF_RECHECK_TIME,
     CONF_SOLAR_RADIATION,
     CONF_SUNRISE_OFFSET,
@@ -44,6 +47,9 @@ from .const import (
     DEFAULT_LOW_THRESHOLD,
     DEFAULT_PUSHOVER_ENABLED,
     DEFAULT_PUSHOVER_PRIORITY,
+    DEFAULT_NOTIFY_SERVICE,
+    DEFAULT_DAILY_REPORT_ENABLED,
+    DEFAULT_DAILY_REPORT_HOUR,
     DEFAULT_RECHECK_TIME,
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_SUNRISE_OFFSET,
@@ -414,6 +420,20 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         min=-2, max=2, mode=selector.NumberSelectorMode.BOX
                     )
                 ),
+                vol.Optional(CONF_NOTIFY_SERVICE, default=DEFAULT_NOTIFY_SERVICE): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Optional(
+                    CONF_DAILY_REPORT_ENABLED, default=DEFAULT_DAILY_REPORT_ENABLED
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_DAILY_REPORT_HOUR, default=DEFAULT_DAILY_REPORT_HOUR
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=23, unit_of_measurement="Uhr",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
             }
         )
 
@@ -534,6 +554,25 @@ class SmartIrrigationOptionsFlow(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=-2, max=2, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional(
+                    CONF_NOTIFY_SERVICE,
+                    default=current_config.get(CONF_NOTIFY_SERVICE, DEFAULT_NOTIFY_SERVICE),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Optional(
+                    CONF_DAILY_REPORT_ENABLED,
+                    default=current_config.get(CONF_DAILY_REPORT_ENABLED, DEFAULT_DAILY_REPORT_ENABLED),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_DAILY_REPORT_HOUR,
+                    default=current_config.get(CONF_DAILY_REPORT_HOUR, DEFAULT_DAILY_REPORT_HOUR),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=23, unit_of_measurement="Uhr",
+                        mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
             }

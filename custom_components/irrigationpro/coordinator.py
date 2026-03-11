@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_time_interval, async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -22,6 +22,9 @@ from .const import (
     CONF_PUSHOVER_ENABLED,
     CONF_PUSHOVER_PRIORITY,
     CONF_PUSHOVER_USER_KEY,
+    CONF_NOTIFY_SERVICE,
+    CONF_DAILY_REPORT_ENABLED,
+    CONF_DAILY_REPORT_HOUR,
     CONF_RECHECK_TIME,
     CONF_SOLAR_RADIATION,
     CONF_SUNRISE_OFFSET,
@@ -117,6 +120,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._schedule_checker_unsub = None
         self.schedule_reason: str = ""  # Why no watering is scheduled
         self.history: list[dict] = []  # Irrigation & skip history (max 180 entries)
+        self.last_calculated: datetime | None = None  # When the schedule was last calculated
+        self._daily_report_unsub = None
         
         # Validate configuration
         if not entry.data.get(CONF_WEATHER_ENTITY):
@@ -142,6 +147,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._schedule_checker_unsub = async_track_time_interval(
             hass, self._check_schedule, timedelta(minutes=1)
         )
+        # Set up daily morning report if configured
+        self._setup_daily_report()
 
     def _init_zones(self):
         """Initialize zones from configuration."""
@@ -302,12 +309,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     zone.duration,
                 )
         
-        if total_duration == 0:
-            _LOGGER.info("No watering needed")
-            self.scheduled_run = None
-            self.schedule_reason = "Kein Bewässerungsbedarf (ETo durch Regen gedeckt oder kein aktiver Bewässerungstag)"
-            self._log_skip_event(self.schedule_reason, self.forecast[day_index])
-            return
+        # Track when calculation happened for cases with no watering
+        self.last_calculated = dt_util.now()
         
         # Calculate start and end times
         sunrise = self.forecast[day_index].sunrise
@@ -316,6 +319,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         self.scheduled_run = start_time
         self.schedule_reason = ""
+        self._setup_daily_report()  # re-register in case hour changed in options
         
         _LOGGER.info(
             "Watering scheduled: Start=%s, End=%s, Duration=%.1f min",
@@ -502,15 +506,18 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                         await self._water_zone(zone)
             
             _LOGGER.info("Watering cycle completed")
-            
-            # Send completion notification
-            zones_watered = [z.name for z in self.zones if z.enabled and z.duration > 0]
+
+            # Send completion notification with per-zone details
+            cycles = self.entry.data.get(CONF_CYCLES, 2)
+            zones_watered = [(z.name, z.duration) for z in self.zones if z.enabled and z.duration > 0]
+            zone_lines = "\n".join([f"\u2022 {name}: {dur:.0f} min" for name, dur in zones_watered])
+            total_actual = sum(d for _, d in zones_watered) * cycles
             await self._send_pushover_notification(
-                f"✅ Bewässerung abgeschlossen",
-                f"Alle Zonen bewässert: {', '.join(zones_watered)}",
-                priority=0
+                "\u2705 Bew\u00e4sserung abgeschlossen",
+                f"Alle Zonen bew\u00e4ssert ({cycles} Zyklen), gesamt ~{total_actual:.0f} min:\n{zone_lines}",
+                priority=0,
             )
-            
+
             # Update last run times
             for zone in self.zones:
                 if zone.enabled and zone.duration > 0:
@@ -544,7 +551,6 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         zone.is_running = True
         zone.started_at = dt_util.now()
-        zone.next_run = dt_util.now()
         zone_planned_duration = zone.duration
         
         # Turn on the actual switch/valve entity
@@ -659,6 +665,44 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     _LOGGER.error("Failed to turn off entity '%s': %s", zone.switch_entity, err)
             
             self.async_set_updated_data(self.data)
+
+    def _setup_daily_report(self) -> None:
+        """Register (or re-register) the daily morning report timer."""
+        if self._daily_report_unsub:
+            self._daily_report_unsub()
+            self._daily_report_unsub = None
+        if not self.entry.data.get(CONF_DAILY_REPORT_ENABLED, DEFAULT_DAILY_REPORT_ENABLED):
+            return
+        hour = int(self.entry.data.get(CONF_DAILY_REPORT_HOUR, DEFAULT_DAILY_REPORT_HOUR))
+        self._daily_report_unsub = async_track_time_change(
+            self.hass, self._async_send_daily_report, hour=hour, minute=0, second=5,
+        )
+        _LOGGER.debug("Daily report scheduled at %02d:00", hour)
+
+    async def _async_send_daily_report(self, _now=None) -> None:
+        """Send the daily morning report via the configured notify service."""
+        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        if self.scheduled_run:
+            local_start = self.scheduled_run.astimezone(dt_util.now().tzinfo)
+            zones_info = [
+                f"\u2022 {z.name}: {z.duration * cycles:.0f} min"
+                for z in self.zones if z.enabled and z.duration > 0
+            ]
+            message = (
+                f"Start: {local_start.strftime('%H:%M')} Uhr\n"
+                + "\n".join(zones_info or ["Keine Zonen konfiguriert"])
+                + f"\n({cycles} Zyklen)"
+            )
+            await self._send_pushover_notification(
+                "\U0001f331 Bew\u00e4sserungsplan heute", message, priority=-1
+            )
+        else:
+            reason = self.schedule_reason or "Kein Bew\u00e4sserungsbedarf"
+            await self._send_pushover_notification(
+                "\U0001f331 Heute keine Bew\u00e4sserung",
+                f"Grund: {reason}",
+                priority=-2,
+            )
 
     def _log_zone_run(
         self,
@@ -862,47 +906,54 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     async def _send_pushover_notification(
         self, title: str, message: str, priority: int = 0
     ):
-        """Send Pushover notification if enabled."""
+        """Send notification via the configured HA notify service."""
         if not self.entry.data.get(CONF_PUSHOVER_ENABLED, False):
             return
-        
+
         user_key = self.entry.data.get(CONF_PUSHOVER_USER_KEY)
         if not user_key:
             _LOGGER.warning("Pushover enabled but no user key configured")
             return
-        
+
+        notify_service = self.entry.data.get(CONF_NOTIFY_SERVICE, DEFAULT_NOTIFY_SERVICE).strip() or DEFAULT_NOTIFY_SERVICE
+
         try:
-            service_data = {
+            service_data: dict = {
                 "message": message,
                 "title": title,
-                "data": {
+            }
+
+            # Pushover-specific: priority in data block
+            if notify_service == "pushover":
+                service_data["data"] = {
                     "priority": self.entry.data.get(CONF_PUSHOVER_PRIORITY, priority),
                 }
-            }
-            
-            # Add device if specified
+
+            # Add device target if specified
             device = self.entry.data.get(CONF_PUSHOVER_DEVICE)
             if device:
-                service_data["target"] = device
-            
-            # Call notify.pushover service
+                service_data["target"] = [device]
+
             await self.hass.services.async_call(
                 "notify",
-                "pushover",
+                notify_service,
                 service_data,
                 blocking=False,
             )
-            _LOGGER.debug("Sent Pushover notification: %s", title)
-            
+            _LOGGER.debug("Sent notification via notify.%s: %s", notify_service, title)
+
         except Exception as err:
-            _LOGGER.error("Failed to send Pushover notification: %s", err)
+            _LOGGER.error("Failed to send notification via notify.%s: %s", notify_service, err)
 
     async def async_shutdown(self):
         """Shutdown coordinator."""
         if self._schedule_checker_unsub:
             self._schedule_checker_unsub()
-        
+
+        if self._daily_report_unsub:
+            self._daily_report_unsub()
+
         if self._watering_task and not self._watering_task.done():
             self._watering_task.cancel()
-        
+
         await self.weather_provider.async_close()
