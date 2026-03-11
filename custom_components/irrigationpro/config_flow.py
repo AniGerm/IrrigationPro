@@ -80,7 +80,8 @@ async def _get_weather_entities(hass: HomeAssistant) -> list[str]:
     return weather_entities
 
 
-class SmartIrrigationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+@config_entries.HANDLERS.register(DOMAIN)
+class SmartIrrigationConfigFlow(config_entries.ConfigFlow):
     """Handle a config flow for IrrigationPro."""
 
     VERSION = 1
