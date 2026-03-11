@@ -177,8 +177,48 @@ class IrrigationProRecalculateView(HomeAssistantView):
         return self.json({"status": "recalculation_triggered"})
 
 
+class IrrigationProTestView(HomeAssistantView):
+    """API view for test mode (relay test + schedule simulation)."""
+
+    url = "/api/irrigationpro/test"
+    name = "api:irrigationpro:test"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Run test mode."""
+        hass: HomeAssistant = request.app["hass"]
+        data = await request.json()
+        mode = data.get("mode", "schedule")
+
+        coordinators = hass.data.get(DOMAIN, {})
+        if not coordinators:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        coordinator = next(iter(coordinators.values()))
+
+        if mode == "relay":
+            # Start each enabled zone for 1 minute (non-blocking)
+            zones_started = []
+            for zone in coordinator.zones:
+                if zone.enabled:
+                    await coordinator.async_start_zone_manual(zone.zone_id, 1)
+                    zones_started.append({
+                        "zone_id": zone.zone_id,
+                        "name": zone.name,
+                        "switch_entity": zone.switch_entity,
+                    })
+            return self.json({"status": "relay_test_started", "zones": zones_started})
+
+        elif mode == "schedule":
+            result = await coordinator.async_test_schedule()
+            return self.json(result)
+
+        return self.json({"error": f"Unknown mode: {mode}"}, status_code=400)
+
+
 def async_register_api(hass: HomeAssistant) -> None:
     """Register API views."""
     hass.http.register_view(IrrigationProApiView)
     hass.http.register_view(IrrigationProZoneControlView)
     hass.http.register_view(IrrigationProRecalculateView)
+    hass.http.register_view(IrrigationProTestView)

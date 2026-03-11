@@ -337,6 +337,92 @@
       gap: 4px;
     }
 
+    /* Lang toggle */
+    .btn-lang {
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .btn-lang:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 900;
+      align-items: center; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 520px;
+      width: 90%;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.35);
+      position: relative;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .modal-section {
+      background: rgba(33,150,243,0.06);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .modal-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .modal-section p  { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5; }
+    .modal-close {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; font-size: 22px;
+      cursor: pointer; color: var(--text-secondary);
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--text); }
+    .test-result {
+      margin-top: 16px;
+      background: rgba(0,0,0,0.05);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .test-result.hidden { display: none; }
+    .test-result .result-zone { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
+    .test-result .result-zone:last-child { border-bottom: none; }
+    .result-skip { color: var(--text-secondary); font-style: italic; }
+
+    /* Floating test button */
+    .fab-test {
+      position: fixed; bottom: 24px; right: 24px;
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      font-size: 22px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .fab-test:hover { transform: scale(1.12); box-shadow: 0 6px 20px rgba(0,0,0,0.28); }
+
     .duration-input {
       width: 60px;
       padding: 4px 8px;
@@ -357,61 +443,253 @@
   </style>
 </head>
 <body>
+  <!-- Test Modal -->
+  <div class="modal-backdrop" id="testModal" onclick="if(event.target===this)closeTestModal()">
+    <div class="modal">
+      <button class="modal-close" onclick="closeTestModal()">✕</button>
+      <div class="modal-title" data-i18n="test.title">🧪 Test-Modus</div>
+
+      <div class="modal-section">
+        <h3 data-i18n="test.relay_title">Relais-Test</h3>
+        <p data-i18n="test.relay_desc">Startet jede aktivierte Zone für 1 Minute. Überprüft ob die zugewiesenen Entitäten schalten.</p>
+        <button class="btn btn-success btn-sm" onclick="runTest('relay')" data-i18n="test.relay_btn">▶ Relais-Test starten</button>
+        <div class="test-result hidden" id="relayResult"></div>
+      </div>
+
+      <div class="modal-section">
+        <h3 data-i18n="test.schedule_title">Planungs-Test</h3>
+        <p data-i18n="test.schedule_desc">Simuliert einen heißen, trockenen Sommertag (35°C, 0mm Regen) und zeigt was der Bewässerungsplan wäre – ohne echte Bewässerung.</p>
+        <button class="btn btn-primary btn-sm" onclick="runTest('schedule')" data-i18n="test.schedule_btn">🔍 Plan simulieren</button>
+        <div class="test-result hidden" id="scheduleResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating test button -->
+  <button class="fab-test" onclick="openTestModal()" title="Test-Modus">🧪</button>
+
   <div class="header">
     <h1>🌿 IrrigationPro Dashboard</h1>
     <div class="header-actions">
       <span class="auto-refresh" id="lastUpdate">--</span>
+      <button class="btn-lang" onclick="toggleLang()" id="langBtn">EN</button>
       <button class="btn btn-primary btn-sm" onclick="recalculate()">
-        🔄 Neu berechnen
+        <span data-i18n="header.recalculate">🔄 Neu berechnen</span>
       </button>
       <button class="btn btn-primary btn-sm" onclick="loadData()">
-        ↻ Aktualisieren
+        <span data-i18n="header.refresh">↻ Aktualisieren</span>
       </button>
     </div>
   </div>
 
   <div class="status-bar" id="statusBar">
     <div class="status-item">
-      <span class="status-label">Nächste Bewässerung</span>
+      <span class="status-label" data-i18n="status.next_watering">Nächste Bewässerung</span>
       <span class="status-value" id="nextScheduled">--</span>
     </div>
     <div class="status-item">
-      <span class="status-label">Aktive Zonen</span>
+      <span class="status-label" data-i18n="status.active_zones">Aktive Zonen</span>
       <span class="status-value" id="activeZones">--</span>
     </div>
     <div class="status-item">
-      <span class="status-label">Letztes Update</span>
+      <span class="status-label" data-i18n="status.last_update">Letztes Update</span>
       <span class="status-value" id="dataUpdate">--</span>
     </div>
   </div>
 
   <div class="grid" id="zonesContainer">
-    <div class="loading"><div class="spinner"></div>Lade Daten...</div>
+    <div class="loading"><div class="spinner"></div><span data-i18n="loading.data">Lade Daten...</span></div>
   </div>
 
   <div class="forecast-section">
-    <h2 class="section-title">📊 Wettervorhersage &amp; ETo-Berechnung</h2>
+    <h2 class="section-title" data-i18n="forecast.title">📊 Wettervorhersage &amp; ETo-Berechnung</h2>
     <table class="forecast-table" id="forecastTable">
       <thead>
         <tr>
-          <th>Datum</th>
-          <th>Wetter</th>
-          <th>Min °C</th>
-          <th>Max °C</th>
-          <th>Feuchte %</th>
-          <th>Wind m/s</th>
-          <th>Regen mm</th>
-          <th>ETo mm</th>
-          <th>ETo</th>
+          <th data-i18n="forecast.date">Datum</th>
+          <th data-i18n="forecast.weather">Wetter</th>
+          <th data-i18n="forecast.min">Min °C</th>
+          <th data-i18n="forecast.max">Max °C</th>
+          <th data-i18n="forecast.humidity">Feuchte %</th>
+          <th data-i18n="forecast.wind">Wind m/s</th>
+          <th data-i18n="forecast.rain">Regen mm</th>
+          <th data-i18n="forecast.eto_val">ETo mm</th>
+          <th data-i18n="forecast.eto_bar">ETo</th>
         </tr>
       </thead>
       <tbody id="forecastBody">
-        <tr><td colspan="9" style="text-align:center; padding:30px;">Lade...</td></tr>
+        <tr><td colspan="9" style="text-align:center; padding:30px;"><span data-i18n="loading.forecast">Lade...</span></td></tr>
       </tbody>
     </table>
   </div>
 
   <script>
+    // ── i18n ──────────────────────────────────────────────────────────────────
+    const TRANSLATIONS = {
+      de: {
+        'header.recalculate': '🔄 Neu berechnen',
+        'header.refresh': '↻ Aktualisieren',
+        'header.auto_refresh': 'Auto-Refresh aktiv · {time}',
+        'header.auth_error': '⚠️ Auth-Fehler – Auto-Refresh pausiert',
+        'status.next_watering': 'Nächste Bewässerung',
+        'status.active_zones': 'Aktive Zonen',
+        'status.last_update': 'Letztes Update',
+        'zone.disabled': 'Deaktiviert',
+        'zone.running': '● Aktiv',
+        'zone.idle': 'Bereit',
+        'zone.duration': 'Dauer',
+        'zone.eto_total': 'ETo gesamt',
+        'zone.rain_total': 'Regen gesamt',
+        'zone.water_needed': 'Wasserbedarf',
+        'zone.area': 'Fläche',
+        'zone.efficiency': 'Effizienz',
+        'zone.last_run': 'Letzter Lauf',
+        'zone.next_run': 'Nächster Lauf',
+        'btn.stop': '⏹ Stopp',
+        'btn.start': '▶ Start',
+        'btn.disable': '⏸ Deaktivieren',
+        'btn.enable': '✓ Aktivieren',
+        'btn.stopping': '⏳ Stoppt…',
+        'btn.starting': '⏳ Startet…',
+        'entity.on': 'EIN',
+        'entity.off': 'AUS',
+        'entity.not_configured': 'Nicht konfiguriert',
+        'loading.data': 'Lade Daten...',
+        'loading.forecast': 'Lade...',
+        'loading.no_instance': 'Keine IrrigationPro-Instanz konfiguriert',
+        'date.today': 'Heute',
+        'date.tomorrow': 'Morgen',
+        'forecast.title': '📊 Wettervorhersage & ETo-Berechnung',
+        'forecast.date': 'Datum',
+        'forecast.weather': 'Wetter',
+        'forecast.min': 'Min °C',
+        'forecast.max': 'Max °C',
+        'forecast.humidity': 'Feuchte %',
+        'forecast.wind': 'Wind m/s',
+        'forecast.rain': 'Regen mm',
+        'forecast.eto_val': 'ETo mm',
+        'forecast.eto_bar': 'ETo',
+        'toast.zone_started': 'Zone {id} gestartet ({dur} min)',
+        'toast.zone_stopped': 'Zone {id} gestoppt',
+        'toast.zone_enabled': 'Zone {id} aktiviert',
+        'toast.zone_disabled': 'Zone {id} deaktiviert',
+        'toast.recalculate': 'Neuberechnung gestartet',
+        'auth.title': '🔐 Authentifizierung fehlgeschlagen (401). Erzeuge in HA unter Profil → Sicherheit → Langlebige Zugriffstoken einen Token.',
+        'auth.placeholder': 'Token einfügen…',
+        'auth.save': 'Speichern',
+        'test.title': '🧪 Test-Modus',
+        'test.relay_title': 'Relais-Test',
+        'test.relay_desc': 'Startet jede aktivierte Zone für 1 Minute. Überprüft ob die zugewiesenen Entitäten schalten.',
+        'test.relay_btn': '▶ Relais-Test starten',
+        'test.schedule_title': 'Planungs-Test (Simulate)',
+        'test.schedule_desc': 'Simuliert einen heißen, trockenen Sommertag (35°C, 0mm Regen) und zeigt was der Bewässerungsplan wäre – ohne echte Bewässerung.',
+        'test.schedule_btn': '🔍 Plan simulieren',
+        'test.running': '⏳ Test läuft…',
+        'test.no_schedule': 'Kein Zeitplan nötig / kein Wasserbedarf',
+        'test.would_start': 'Bewässerung würde starten:',
+        'test.total': 'Gesamtdauer (inkl. Zyklen):',
+        'test.cycles': 'Zyklen:',
+        'test.skipped': 'Übersprungen',
+        'test.min': 'min',
+        'test.fake_weather': '☀️ Testklima: 35°C max, 0mm Regen, 30% Feuchte, ETo {eto} mm',
+        'no_scheduled': 'Nicht geplant',
+      },
+      en: {
+        'header.recalculate': '🔄 Recalculate',
+        'header.refresh': '↻ Refresh',
+        'header.auto_refresh': 'Auto-refresh active · {time}',
+        'header.auth_error': '⚠️ Auth error – Auto-refresh paused',
+        'status.next_watering': 'Next Watering',
+        'status.active_zones': 'Active Zones',
+        'status.last_update': 'Last Update',
+        'zone.disabled': 'Disabled',
+        'zone.running': '● Active',
+        'zone.idle': 'Ready',
+        'zone.duration': 'Duration',
+        'zone.eto_total': 'Total ETo',
+        'zone.rain_total': 'Total Rain',
+        'zone.water_needed': 'Water Needed',
+        'zone.area': 'Area',
+        'zone.efficiency': 'Efficiency',
+        'zone.last_run': 'Last Run',
+        'zone.next_run': 'Next Run',
+        'btn.stop': '⏹ Stop',
+        'btn.start': '▶ Start',
+        'btn.disable': '⏸ Disable',
+        'btn.enable': '✓ Enable',
+        'btn.stopping': '⏳ Stopping…',
+        'btn.starting': '⏳ Starting…',
+        'entity.on': 'ON',
+        'entity.off': 'OFF',
+        'entity.not_configured': 'Not configured',
+        'loading.data': 'Loading...',
+        'loading.forecast': 'Loading...',
+        'loading.no_instance': 'No IrrigationPro instance configured',
+        'date.today': 'Today',
+        'date.tomorrow': 'Tomorrow',
+        'forecast.title': '📊 Weather Forecast & ETo Calculation',
+        'forecast.date': 'Date',
+        'forecast.weather': 'Weather',
+        'forecast.min': 'Min °C',
+        'forecast.max': 'Max °C',
+        'forecast.humidity': 'Humidity %',
+        'forecast.wind': 'Wind m/s',
+        'forecast.rain': 'Rain mm',
+        'forecast.eto_val': 'ETo mm',
+        'forecast.eto_bar': 'ETo',
+        'toast.zone_started': 'Zone {id} started ({dur} min)',
+        'toast.zone_stopped': 'Zone {id} stopped',
+        'toast.zone_enabled': 'Zone {id} enabled',
+        'toast.zone_disabled': 'Zone {id} disabled',
+        'toast.recalculate': 'Recalculation started',
+        'auth.title': '🔐 Authentication failed (401). Create a long-lived access token in HA under Profile → Security → Long-Lived Access Tokens.',
+        'auth.placeholder': 'Paste token…',
+        'auth.save': 'Save',
+        'test.title': '🧪 Test Mode',
+        'test.relay_title': 'Relay Test',
+        'test.relay_desc': 'Starts each enabled zone for 1 minute. Verifies that the assigned entities switch on/off.',
+        'test.relay_btn': '▶ Start Relay Test',
+        'test.schedule_title': 'Schedule Test (Simulate)',
+        'test.schedule_desc': 'Simulates a hot, dry summer day (35°C, 0mm rain) and shows what the irrigation schedule would be – without actual watering.',
+        'test.schedule_btn': '🔍 Simulate Schedule',
+        'test.running': '⏳ Test running…',
+        'test.no_schedule': 'No schedule needed / no water demand',
+        'test.would_start': 'Watering would start:',
+        'test.total': 'Total duration (incl. cycles):',
+        'test.cycles': 'Cycles:',
+        'test.skipped': 'Skipped',
+        'test.min': 'min',
+        'test.fake_weather': '☀️ Test climate: 35°C max, 0mm rain, 30% humidity, ETo {eto} mm',
+        'no_scheduled': 'Not scheduled',
+      }
+    };
+
+    let lang = localStorage.getItem('irrigationpro_lang') || 'de';
+
+    function t(key, vars) {
+      let s = (TRANSLATIONS[lang] || TRANSLATIONS.de)[key] || key;
+      if (vars) Object.entries(vars).forEach(([k, v]) => { s = s.replaceAll('{' + k + '}', v); });
+      return s;
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+      });
+      // Update lang toggle label (shows the OTHER language you can switch to)
+      const lb = document.getElementById('langBtn');
+      if (lb) lb.textContent = lang === 'de' ? 'EN' : 'DE';
+    }
+
+    function toggleLang() {
+      lang = lang === 'de' ? 'en' : 'de';
+      localStorage.setItem('irrigationpro_lang', lang);
+      applyI18n();
+      if (_lastData) renderData(_lastData);
+    }
+
+    let _lastData = null;
     let refreshTimer = null;
     const API_BASE = '/api/irrigationpro';
 
@@ -588,28 +866,25 @@
           _consecutiveAuthErrors++;
           resetAuth();
           if (_consecutiveAuthErrors >= 2) {
-            // Stop hammering HA – pause auto-refresh and show banner
             clearInterval(refreshTimer);
             refreshTimer = null;
             showAuthBanner();
-            document.getElementById('lastUpdate').textContent = '⚠️ Auth-Fehler – Auto-Refresh pausiert';
+            document.getElementById('lastUpdate').textContent = t('header.auth_error');
           }
           return;
         }
 
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
 
-        // Successful response – clear error state
         _consecutiveAuthErrors = 0;
         hideAuthBanner();
-        if (!refreshTimer) {
-          refreshTimer = setInterval(loadData, 30000);
-        }
+        if (!refreshTimer) refreshTimer = setInterval(loadData, 30000);
 
         const data = await resp.json();
+        _lastData = data;
         renderData(data);
         document.getElementById('lastUpdate').textContent =
-          'Auto-Refresh aktiv · ' + new Date().toLocaleTimeString('de-DE');
+          t('header.auto_refresh', {time: new Date().toLocaleTimeString(lang === 'de' ? 'de-DE' : 'en-GB')});
 
       } catch(err) {
         console.error('[IrrPro] Load error:', err);
@@ -621,14 +896,14 @@
     function renderData(data) {
       if (!data.entries || data.entries.length === 0) {
         document.getElementById('zonesContainer').innerHTML =
-          '<div class="loading">Keine IrrigationPro-Instanz konfiguriert</div>';
+          '<div class="loading">' + t('loading.no_instance') + '</div>';
         return;
       }
 
       const entry = data.entries[0];
 
       document.getElementById('nextScheduled').textContent =
-        entry.scheduled_run ? formatDate(entry.scheduled_run) : 'Nicht geplant';
+        entry.scheduled_run ? formatDate(entry.scheduled_run) : t('no_scheduled');
       document.getElementById('activeZones').textContent =
         entry.zones.filter(z => z.is_running).length + ' / ' + entry.zones.length;
       document.getElementById('dataUpdate').textContent =
@@ -653,16 +928,20 @@
       let html = '';
       for (const zone of entry.zones) {
         const statusClass = !zone.enabled ? 'disabled' : zone.is_running ? 'running' : 'idle';
-        const statusText = !zone.enabled ? 'Deaktiviert' : zone.is_running ? '● Aktiv' : 'Bereit';
+        const statusText = !zone.enabled ? t('zone.disabled') : zone.is_running ? t('zone.running') : t('zone.idle');
         const entityDot = zone.entity_state === 'on' ? 'on' : zone.entity_state === 'off' ? 'off' : 'unknown';
-        const entityLabel = zone.switch_entity || 'Nicht konfiguriert';
-        const entityStateText = zone.entity_state === 'on' ? 'EIN' : zone.entity_state === 'off' ? 'AUS' : zone.entity_state || '?';
+        const entityLabel = zone.switch_entity || t('entity.not_configured');
+        const entityStateText = zone.entity_state === 'on' ? t('entity.on') : zone.entity_state === 'off' ? t('entity.off') : zone.entity_state || '?';
         const skipReasonHtml = (!zone.is_running && zone.skip_reason)
           ? `<div style="font-size:12px;color:var(--text-secondary);background:rgba(255,152,0,0.1);border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ ${zone.skip_reason}</div>`
           : '';
         const toggleBtn = zone.enabled
-          ? `<button class="btn btn-sm" style="background:rgba(244,67,54,0.15);color:var(--danger)" onclick="toggleZoneEnabled(${zone.zone_id}, false)">⏸ Deaktivieren</button>`
-          : `<button class="btn btn-sm" style="background:rgba(76,175,80,0.15);color:var(--success)" onclick="toggleZoneEnabled(${zone.zone_id}, true)">✓ Aktivieren</button>`;
+          ? `<button class="btn btn-sm" style="background:rgba(244,67,54,0.15);color:var(--danger)" onclick="toggleZoneEnabled(${zone.zone_id}, false)">${t('btn.disable')}</button>`
+          : `<button class="btn btn-sm" style="background:rgba(76,175,80,0.15);color:var(--success)" onclick="toggleZoneEnabled(${zone.zone_id}, true)">${t('btn.enable')}</button>`;
+        const startStopBtn = zone.is_running
+          ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'stop')">${t('btn.stop')}</button>`
+          : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" value="${zone.duration > 0 ? Math.round(zone.duration) : 10}" min="1" max="180" title="${t('zone.duration')}">
+             <button class="btn btn-success btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'start')" ${!zone.enabled ? 'disabled' : ''}>${t('btn.start')}</button>`;
 
         html += `
           <div class="card" id="zone_card_${zone.zone_id}">
@@ -677,47 +956,16 @@
             </div>
             ${skipReasonHtml}
             <div class="info-grid">
-              <div class="info-item">
-                <span class="info-label">Dauer</span>
-                <span class="info-value">${zone.duration > 0 ? zone.duration + ' min' : '–'}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">ETo gesamt</span>
-                <span class="info-value">${zone.eto_total} mm</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Regen gesamt</span>
-                <span class="info-value">${zone.rain_total} mm</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Wasserbedarf</span>
-                <span class="info-value">${zone.water_needed} L</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Fläche</span>
-                <span class="info-value">${zone.area} m²</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Effizienz</span>
-                <span class="info-value">${zone.efficiency}%</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Letzter Lauf</span>
-                <span class="info-value">${zone.last_run ? formatDate(zone.last_run) : '--'}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Nächster Lauf</span>
-                <span class="info-value">${zone.next_run ? formatDate(zone.next_run) : '--'}</span>
-              </div>
+              <div class="info-item"><span class="info-label">${t('zone.duration')}</span><span class="info-value">${zone.duration > 0 ? zone.duration + ' min' : '–'}</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.eto_total')}</span><span class="info-value">${zone.eto_total} mm</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.rain_total')}</span><span class="info-value">${zone.rain_total} mm</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.water_needed')}</span><span class="info-value">${zone.water_needed} L</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.area')}</span><span class="info-value">${zone.area} m²</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.efficiency')}</span><span class="info-value">${zone.efficiency}%</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.last_run')}</span><span class="info-value">${zone.last_run ? formatDate(zone.last_run) : '--'}</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.next_run')}</span><span class="info-value">${zone.next_run ? formatDate(zone.next_run) : '--'}</span></div>
             </div>
-            <div class="card-actions">
-              ${zone.is_running
-                ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'stop')">⏹ Stopp</button>`
-                : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" value="${zone.duration > 0 ? Math.round(zone.duration) : 10}" min="1" max="180" title="Minuten">
-                   <button class="btn btn-success btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'start')" ${!zone.enabled ? 'disabled title="Zone deaktiviert"' : ''}>▶ Start</button>`
-              }
-              ${toggleBtn}
-            </div>
+            <div class="card-actions">${startStopBtn}${toggleBtn}</div>
           </div>`;
       }
       document.getElementById('zonesContainer').innerHTML = html;
@@ -749,7 +997,7 @@
       const durationEl = document.getElementById('dur_' + zoneId);
       const dur = durationEl ? parseInt(durationEl.value, 10) || 10 : 10;
       const btn = document.getElementById('btn_' + zoneId);
-      if (btn) { btn.disabled = true; btn.textContent = action === 'start' ? '⏳ Startet…' : '⏳ Stoppt…'; }
+      if (btn) { btn.disabled = true; btn.textContent = action === 'start' ? t('btn.starting') : t('btn.stopping'); }
 
       try {
         const resp = await fetch(API_BASE + '/zone/' + action, {
@@ -759,10 +1007,15 @@
         });
         if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        showToast(action === 'start' ? `Zone ${zoneId} gestartet (${dur} min)` : `Zone ${zoneId} gestoppt`, 'success');
+        showToast(
+          action === 'start'
+            ? t('toast.zone_started', {id: zoneId, dur: dur})
+            : t('toast.zone_stopped', {id: zoneId}),
+          'success'
+        );
         setTimeout(loadData, 800);
       } catch(err) {
-        if (btn) { btn.disabled = false; btn.textContent = action === 'start' ? '▶ Start' : '⏹ Stopp'; }
+        if (btn) { btn.disabled = false; btn.textContent = action === 'start' ? t('btn.start') : t('btn.stop'); }
         showToast('Fehler: ' + err.message, 'error');
       }
     }
@@ -776,24 +1029,90 @@
         });
         if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        showToast(enable ? `Zone ${zoneId} aktiviert` : `Zone ${zoneId} deaktiviert`, 'success');
+        showToast(enable ? t('toast.zone_enabled', {id: zoneId}) : t('toast.zone_disabled', {id: zoneId}), 'success');
         setTimeout(loadData, 500);
       } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
     }
 
     async function recalculate() {
       try {
-        const resp = await fetch(API_BASE + '/recalculate', {
-          method: 'POST', headers: await authHeaders()
-        });
+        const resp = await fetch(API_BASE + '/recalculate', { method: 'POST', headers: await authHeaders() });
         if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        showToast('Neuberechnung gestartet', 'success');
+        showToast(t('toast.recalculate'), 'success');
         setTimeout(loadData, 3000);
       } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
     }
 
+    // ── Test Modal ────────────────────────────────────────────────────────────
+    function openTestModal() {
+      document.getElementById('testModal').classList.add('open');
+      document.querySelectorAll('#testModal [data-i18n]').forEach(el => {
+        el.textContent = t(el.getAttribute('data-i18n'));
+      });
+      document.getElementById('relayResult').classList.add('hidden');
+      document.getElementById('scheduleResult').classList.add('hidden');
+    }
+
+    function closeTestModal() {
+      document.getElementById('testModal').classList.remove('open');
+    }
+
+    async function runTest(mode) {
+      const resultEl = document.getElementById(mode === 'relay' ? 'relayResult' : 'scheduleResult');
+      resultEl.classList.remove('hidden');
+      resultEl.innerHTML = '<em>' + t('test.running') + '</em>';
+
+      try {
+        const resp = await fetch(API_BASE + '/test', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ mode })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); closeTestModal(); return; }
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const result = await resp.json();
+
+        if (mode === 'relay') {
+          if (!result.zones || result.zones.length === 0) {
+            resultEl.innerHTML = '<em>Keine aktivierten Zonen / No enabled zones found.</em>';
+            return;
+          }
+          let html = '<strong>✅ ' + result.zones.length + ' Zone(s) gestartet / started (1 min):</strong><br><br>';
+          for (const z of result.zones) {
+            html += `<div class="result-zone"><span>💧 ${z.name}</span><span style="color:var(--text-secondary);font-size:12px">${z.switch_entity || '–'}</span></div>`;
+          }
+          resultEl.innerHTML = html;
+          setTimeout(loadData, 1500);
+        } else {
+          let html = `<div style="margin-bottom:10px">${t('test.fake_weather', {eto: result.fake_weather.eto})}</div>`;
+          if (result.scheduled_would_be) {
+            html += `<div style="margin-bottom:8px"><strong>${t('test.would_start')}</strong> <span style="color:var(--success)">${formatDate(result.scheduled_would_be)}</span></div>`;
+          } else {
+            html += `<div style="margin-bottom:8px;color:var(--text-secondary)">${t('test.no_schedule')}</div>`;
+            if (result.schedule_reason) html += `<div style="font-size:12px;margin-bottom:8px">${result.schedule_reason}</div>`;
+          }
+          html += `<div style="margin-bottom:8px"><strong>${t('test.total')}</strong> ${result.total_duration_minutes} min &nbsp;|&nbsp; <strong>${t('test.cycles')}</strong> ${result.cycles}</div>`;
+          html += '<hr style="border-color:var(--border);margin:10px 0">';
+          for (const z of result.zones) {
+            const hasSkip = z.skip_reason && z.duration === 0;
+            html += `<div class="result-zone">
+              <span>💧 ${z.name}</span>
+              <span>${hasSkip
+                ? '<em class="result-skip">' + t('test.skipped') + ': ' + z.skip_reason + '</em>'
+                : '<strong>' + z.duration + ' ' + t('test.min') + '</strong>'
+              }</span>
+            </div>`;
+          }
+          resultEl.innerHTML = html;
+        }
+      } catch(err) {
+        resultEl.innerHTML = '<span style="color:var(--danger)">Fehler: ' + err.message + '</span>';
+      }
+    }
+
     // ── Startup ───────────────────────────────────────────────────────────────
+    applyI18n();
     loadData();
     refreshTimer = setInterval(loadData, 30000);
   </script>

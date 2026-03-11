@@ -660,6 +660,97 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             await self._async_calculate_schedule()
         self.async_set_updated_data(self.data)
 
+    async def async_test_schedule(self) -> dict:
+        """Simulate schedule with spoofed hot/dry weather (read-only, does not modify real state)."""
+        lat = self.hass.config.latitude
+        alt = self.hass.config.elevation
+        solar_rad = 8.0  # Peak summer solar radiation kWh/m²/day
+
+        # Build 8 fake days: hot, dry summer
+        fake_forecast: list[WeatherData] = []
+        now = dt_util.now()
+        for i in range(8):
+            day = WeatherData()
+            day.sunrise = now.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=i)
+            day.min_temp = 18.0
+            day.max_temp = 35.0
+            day.humidity = 30.0
+            day.pressure = 1013.0
+            day.wind_speed = 4.0
+            day.rain = 0.0
+            day.condition = "sunny"
+            day.summary = "Sunny"
+            day.eto = calculate_eto(
+                min_temp=day.min_temp,
+                max_temp=day.max_temp,
+                humidity=day.humidity,
+                pressure=day.pressure,
+                wind_speed=day.wind_speed,
+                solar_radiation=solar_rad,
+                altitude=alt,
+                latitude=lat,
+                date=day.sunrise,
+            )
+            fake_forecast.append(day)
+
+        # Temporarily replace forecast for duration calculations
+        real_forecast = self.forecast
+        self.forecast = fake_forecast
+
+        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        sunrise_offset = self.entry.data.get(CONF_SUNRISE_OFFSET, 0)
+
+        zone_results = []
+        total_duration = 0.0
+        try:
+            for zone in self.zones:
+                if zone.enabled:
+                    duration = await self._calculate_zone_duration(zone, 0)
+                    zone_results.append({
+                        "zone_id": zone.zone_id,
+                        "name": zone.name,
+                        "duration": round(duration, 1),
+                        "skip_reason": getattr(zone, "skip_reason", ""),
+                    })
+                    total_duration += duration * cycles
+                else:
+                    zone_results.append({
+                        "zone_id": zone.zone_id,
+                        "name": zone.name,
+                        "duration": 0,
+                        "skip_reason": "Zone deaktiviert / Zone disabled",
+                    })
+        finally:
+            self.forecast = real_forecast
+
+        scheduled_would_be = None
+        schedule_reason = ""
+        if total_duration > 0:
+            sunrise = fake_forecast[0].sunrise
+            start_time = sunrise - timedelta(minutes=total_duration + sunrise_offset)
+            if start_time < now:
+                sunrise = fake_forecast[1].sunrise
+                start_time = sunrise - timedelta(minutes=total_duration + sunrise_offset)
+            scheduled_would_be = start_time.isoformat()
+        else:
+            schedule_reason = "Kein Bewässerungsbedarf / No watering needed"
+
+        return {
+            "zones": zone_results,
+            "total_duration_minutes": round(total_duration, 1),
+            "cycles": cycles,
+            "scheduled_would_be": scheduled_would_be,
+            "schedule_reason": schedule_reason,
+            "fake_weather": {
+                "max_temp": 35,
+                "min_temp": 18,
+                "humidity": 30,
+                "wind": 4.0,
+                "rain": 0,
+                "eto": round(fake_forecast[0].eto, 2),
+            },
+        }
+
     async def _async_load_storage(self):
         """Load stored data."""
         if self._storage is None:
