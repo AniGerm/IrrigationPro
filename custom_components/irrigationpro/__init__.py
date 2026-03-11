@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -58,8 +59,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             # Register static path for frontend files
             frontend_path = Path(__file__).parent / "frontend"
-            hass.http.register_static_path(
-                f"/{DOMAIN}/frontend", str(frontend_path), cache_headers=False
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(f"/{DOMAIN}/frontend", str(frontend_path), False)]
             )
 
             # Register panel in sidebar
