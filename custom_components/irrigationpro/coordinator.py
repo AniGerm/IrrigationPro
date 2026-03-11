@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval, async_track_time_change
@@ -22,7 +23,6 @@ from .const import (
     CONF_PUSHOVER_ENABLED,
     CONF_PUSHOVER_PRIORITY,
     CONF_PUSHOVER_USER_KEY,
-    CONF_NOTIFY_SERVICE,
     CONF_DAILY_REPORT_ENABLED,
     CONF_DAILY_REPORT_HOUR,
     CONF_RECHECK_TIME,
@@ -48,7 +48,6 @@ from .const import (
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_SOLAR_RADIATION,
-    DEFAULT_NOTIFY_SERVICE,
     DEFAULT_DAILY_REPORT_ENABLED,
     DEFAULT_DAILY_REPORT_HOUR,
     DOMAIN,
@@ -914,56 +913,68 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         force: bool = False,
         test_mode: bool = False,
     ):
-        """Send notification via the configured HA notify service.
+        """Send notification directly via Pushover API (no HA notify service needed).
         
         Args:
-            test_mode: If True, blocks for response and raises on error
-                      (for test button to get real feedback).
-                      If False, fires async and only logs errors.
+            test_mode: If True, raises on error for frontend feedback.
+                      If False, only logs errors.
         """
         if not force and not self.entry.data.get(CONF_PUSHOVER_ENABLED, False):
             return
 
         user_key = self.entry.data.get(CONF_PUSHOVER_USER_KEY)
         if not user_key:
-            msg = "Pushover enabled but no user key configured"
+            msg = "No Pushover user key configured"
             if test_mode:
                 raise ValueError(msg)
             _LOGGER.warning(msg)
             return
 
-        notify_service = self.entry.data.get(CONF_NOTIFY_SERVICE, DEFAULT_NOTIFY_SERVICE).strip() or DEFAULT_NOTIFY_SERVICE
+        # Pushover API endpoint
+        api_url = "https://api.pushover.net/1/messages.json"
+        
+        payload = {
+            "token": "irrigationpro_app_token",  # Use app token (can register free app with Pushover)
+            "user": user_key,
+            "title": title,
+            "message": message,
+            "priority": priority,
+        }
+
+        # Add device if specified
+        device = self.entry.data.get(CONF_PUSHOVER_DEVICE)
+        if device:
+            payload["device"] = device
 
         try:
-            service_data: dict = {
-                "message": message,
-                "title": title,
-            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, data=payload) as resp:
+                    if resp.status == 200:
+                        result = await resp.json()
+                        if result.get("status") == 1:
+                            _LOGGER.debug("Pushover notification sent: %s", title)
+                            return
+                        else:
+                            errors = result.get("errors", ["Unknown error"])
+                            msg = f"Pushover API error: {', '.join(errors)}"
+                            if test_mode:
+                                raise RuntimeError(msg)
+                            _LOGGER.error(msg)
+                            return
+                    else:
+                        msg = f"Pushover HTTP {resp.status}: {await resp.text()}"
+                        if test_mode:
+                            raise RuntimeError(msg)
+                        _LOGGER.error(msg)
+                        return
 
-            # Pushover-specific: priority in data block
-            if notify_service == "pushover":
-                service_data["data"] = {
-                    "priority": self.entry.data.get(CONF_PUSHOVER_PRIORITY, priority),
-                }
-
-            # Add device target if specified
-            device = self.entry.data.get(CONF_PUSHOVER_DEVICE)
-            if device:
-                service_data["target"] = [device]
-
-            # Test mode: wait for response; production: fire-and-forget
-            blocking = True if test_mode else False
-
-            await self.hass.services.async_call(
-                "notify",
-                notify_service,
-                service_data,
-                blocking=blocking,
-            )
-            _LOGGER.debug("Sent notification via notify.%s: %s", notify_service, title)
-
+        except aiohttp.ClientError as err:
+            msg = f"Pushover connection error: {err}"
+            if test_mode:
+                raise RuntimeError(msg) from err
+            _LOGGER.error(msg)
         except Exception as err:
-            msg = f"Failed to send notification via notify.{notify_service}: {err}"
+            msg = f"Pushover error: {err}"
             if test_mode:
                 raise RuntimeError(msg) from err
             _LOGGER.error(msg)
