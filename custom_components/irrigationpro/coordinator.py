@@ -912,14 +912,24 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         message: str,
         priority: int = 0,
         force: bool = False,
+        test_mode: bool = False,
     ):
-        """Send notification via the configured HA notify service."""
+        """Send notification via the configured HA notify service.
+        
+        Args:
+            test_mode: If True, blocks for response and raises on error
+                      (for test button to get real feedback).
+                      If False, fires async and only logs errors.
+        """
         if not force and not self.entry.data.get(CONF_PUSHOVER_ENABLED, False):
             return
 
         user_key = self.entry.data.get(CONF_PUSHOVER_USER_KEY)
         if not user_key:
-            _LOGGER.warning("Pushover enabled but no user key configured")
+            msg = "Pushover enabled but no user key configured"
+            if test_mode:
+                raise ValueError(msg)
+            _LOGGER.warning(msg)
             return
 
         notify_service = self.entry.data.get(CONF_NOTIFY_SERVICE, DEFAULT_NOTIFY_SERVICE).strip() or DEFAULT_NOTIFY_SERVICE
@@ -941,16 +951,22 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             if device:
                 service_data["target"] = [device]
 
+            # Test mode: wait for response; production: fire-and-forget
+            blocking = True if test_mode else False
+
             await self.hass.services.async_call(
                 "notify",
                 notify_service,
                 service_data,
-                blocking=False,
+                blocking=blocking,
             )
             _LOGGER.debug("Sent notification via notify.%s: %s", notify_service, title)
 
         except Exception as err:
-            _LOGGER.error("Failed to send notification via notify.%s: %s", notify_service, err)
+            msg = f"Failed to send notification via notify.{notify_service}: {err}"
+            if test_mode:
+                raise RuntimeError(msg) from err
+            _LOGGER.error(msg)
 
     async def async_shutdown(self):
         """Shutdown coordinator."""

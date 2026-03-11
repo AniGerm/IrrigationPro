@@ -1286,7 +1286,9 @@
           resultEl.textContent = '✅ Gesendet! Priorität ' + priority;
         } else {
           resultEl.style.color = 'var(--danger)';
-          resultEl.textContent = '❌ ' + (data.error || 'Fehler');
+          let errMsg = data.error || 'Fehler';
+          if (data.details) errMsg += ' (' + data.details + ')';
+          resultEl.innerHTML = '❌ ' + errMsg;
         }
       } catch(e) {
         resultEl.style.color = 'var(--danger)';

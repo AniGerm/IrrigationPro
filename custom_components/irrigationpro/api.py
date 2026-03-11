@@ -291,11 +291,15 @@ class IrrigationProTestNotificationView(HomeAssistantView):
                 f"Test-Benachrichtigung erfolgreich! Priorit\u00e4t: {priority}",
                 priority=priority,
                 force=True,
+                test_mode=True,
             )
             return self.json({"status": "sent", "priority": priority})
         except Exception as err:
             _LOGGER.error("test_notification error: %s", err)
-            return self.json({"error": str(err)}, status_code=500)
+            return self.json(
+                {"error": str(err), "details": type(err).__name__},
+                status_code=500,
+            )
 
 
 def async_register_api(hass: HomeAssistant) -> None:
