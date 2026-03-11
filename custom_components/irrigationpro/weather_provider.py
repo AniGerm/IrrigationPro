@@ -30,6 +30,7 @@ class WeatherData:
         self.rain: float = 0
         self.clouds: float = 0
         self.summary: str = ""
+        self.condition: str = ""
         self.eto: float = 0
 
 
@@ -143,6 +144,7 @@ class WeatherProvider:
             
             # Weather condition
             weather.summary = forecast_day.get("condition", "unknown")
+            weather.condition = weather.summary
             
             forecast_data.append(weather)
             _LOGGER.debug(
@@ -175,6 +177,7 @@ class WeatherProvider:
             weather.rain = 0
             weather.clouds = 50
             weather.summary = "unknown"
+            weather.condition = "unknown"
             forecast_data.append(weather)
 
         return forecast_data
@@ -230,6 +233,7 @@ class WeatherProvider:
             weather.rain = day.get("rain", 0)
             weather.clouds = day["clouds"]
             weather.summary = day["weather"][0]["description"]
+            weather.condition = day["weather"][0].get("main", "unknown")
             
             forecast_data.append(weather)
             _LOGGER.debug(
