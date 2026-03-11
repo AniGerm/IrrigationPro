@@ -287,7 +287,7 @@ class IrrigationProTestNotificationView(HomeAssistantView):
 
         try:
             await coordinator._send_pushover_notification(
-                "\ud83d\udd14 IrrigationPro Test",
+                "\U0001f514 IrrigationPro Test",
                 f"Test-Benachrichtigung erfolgreich! Priorit\u00e4t: {priority}",
                 priority=priority,
                 force=True,

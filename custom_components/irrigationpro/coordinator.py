@@ -19,6 +19,7 @@ from .const import (
     CONF_HIGH_THRESHOLD,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
+    CONF_PUSHOVER_API_TOKEN,
     CONF_PUSHOVER_DEVICE,
     CONF_PUSHOVER_ENABLED,
     CONF_PUSHOVER_PRIORITY,
@@ -922,6 +923,14 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         if not force and not self.entry.data.get(CONF_PUSHOVER_ENABLED, False):
             return
 
+        api_token = self.entry.data.get(CONF_PUSHOVER_API_TOKEN)
+        if not api_token:
+            msg = "No Pushover API token configured"
+            if test_mode:
+                raise ValueError(msg)
+            _LOGGER.warning(msg)
+            return
+
         user_key = self.entry.data.get(CONF_PUSHOVER_USER_KEY)
         if not user_key:
             msg = "No Pushover user key configured"
@@ -934,7 +943,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         api_url = "https://api.pushover.net/1/messages.json"
         
         payload = {
-            "token": "irrigationpro_app_token",  # Use app token (can register free app with Pushover)
+            "token": api_token,
             "user": user_key,
             "title": title,
             "message": message,

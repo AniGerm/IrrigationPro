@@ -15,6 +15,7 @@ from .const import (
     CONF_HIGH_THRESHOLD,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
+    CONF_PUSHOVER_API_TOKEN,
     CONF_PUSHOVER_DEVICE,
     CONF_PUSHOVER_ENABLED,
     CONF_PUSHOVER_PRIORITY,
@@ -334,7 +335,10 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow):
 
                 # Validate Pushover configuration if enabled
                 if user_input.get(CONF_PUSHOVER_ENABLED, False):
-                    if not user_input.get(CONF_PUSHOVER_USER_KEY):
+                    if not user_input.get(CONF_PUSHOVER_API_TOKEN):
+                        errors["base"] = "pushover_no_token"
+                        _LOGGER.warning("Pushover enabled but no API token provided")
+                    elif not user_input.get(CONF_PUSHOVER_USER_KEY):
                         errors["base"] = "pushover_no_key"
                         _LOGGER.warning("Pushover enabled but no user key provided")
 
@@ -408,6 +412,9 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow):
                 vol.Optional(
                     CONF_PUSHOVER_ENABLED, default=DEFAULT_PUSHOVER_ENABLED
                 ): selector.BooleanSelector(),
+                vol.Optional(CONF_PUSHOVER_API_TOKEN): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
                 vol.Optional(CONF_PUSHOVER_USER_KEY): selector.TextSelector(
                     selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
@@ -459,7 +466,9 @@ class SmartIrrigationOptionsFlow(config_entries.OptionsFlow):
             try:
                 # Validate Pushover configuration if enabled
                 if user_input.get(CONF_PUSHOVER_ENABLED, False):
-                    if not user_input.get(CONF_PUSHOVER_USER_KEY):
+                    if not user_input.get(CONF_PUSHOVER_API_TOKEN):
+                        errors["base"] = "pushover_no_token"
+                    elif not user_input.get(CONF_PUSHOVER_USER_KEY):
                         errors["base"] = "pushover_no_key"
                 
                 if not errors:
@@ -534,6 +543,12 @@ class SmartIrrigationOptionsFlow(config_entries.OptionsFlow):
                     CONF_PUSHOVER_ENABLED,
                     default=current_config.get(CONF_PUSHOVER_ENABLED, DEFAULT_PUSHOVER_ENABLED),
                 ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_PUSHOVER_API_TOKEN,
+                    default=current_config.get(CONF_PUSHOVER_API_TOKEN, ""),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
                 vol.Optional(
                     CONF_PUSHOVER_USER_KEY,
                     default=current_config.get(CONF_PUSHOVER_USER_KEY, ""),

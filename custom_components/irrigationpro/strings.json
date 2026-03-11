@@ -47,9 +47,12 @@
           "high_threshold": "High temperature threshold (°C)",
           "recheck_time": "Recheck before run (minutes, 0 to disable)",
           "pushover_enabled": "Enable Pushover notifications",
+          "pushover_api_token": "Pushover API Token (Application Token)",
           "pushover_user_key": "Pushover User Key",
           "pushover_device": "Pushover Device (optional)",
-          "pushover_priority": "Notification Priority (-2 to 2)"
+          "pushover_priority": "Notification Priority (-2 to 2)",
+          "daily_report_enabled": "Enable daily morning report",
+          "daily_report_hour": "Daily report hour (0-23)"
         }
       }
     },
@@ -59,6 +62,7 @@
       "unknown": "Unexpected error occurred",
       "no_weather_entity": "No weather entity selected",
       "weather_entity_not_found": "Selected weather entity not found",
+      "pushover_no_token": "Pushover enabled but no API token provided",
       "pushover_no_key": "Pushover enabled but no user key provided",
       "invalid_num_zones": "Invalid number of zones (must be 1-16)"
     },
