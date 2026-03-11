@@ -302,6 +302,7 @@ class IrrigationProTestNotificationView(HomeAssistantView):
             return self.json({"error": str(err)}, status_code=500)
 
 
+def async_register_api(hass: HomeAssistant) -> None:
     """Register API views."""
     hass.http.register_view(IrrigationProApiView)
     hass.http.register_view(IrrigationProZoneControlView)
