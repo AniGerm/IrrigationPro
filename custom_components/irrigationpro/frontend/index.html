@@ -412,54 +412,136 @@
   </div>
 
   <script>
-    let refreshTimer;
+    let refreshTimer = null;
     const API_BASE = '/api/irrigationpro';
 
-    // Get auth token reliably from parent HA frame (same-origin iframe)
-    async function getAccessToken() {
-      // Method 1: Access live hass object from parent window (best option)
-      try {
-        if (window.parent && window.parent !== window) {
+    // ── Auth ──────────────────────────────────────────────────────────────────
+    // We cache the HA Auth *object* (not the token string), because the Auth
+    // object knows how to refresh an expired token automatically.
+    let _auth = null;
+    let _authPromise = null;
+    let _consecutiveAuthErrors = 0;
+
+    async function _resolveAuth() {
+      // Try window.parent (same-origin iframe inside HA frontend)
+      if (window.parent && window.parent !== window) {
+        // 1) hassConnection – Promise<[auth, conn]> set by HA frontend
+        try {
+          const hc = window.parent.hassConnection;
+          if (hc && typeof hc.then === 'function') {
+            const result = await Promise.race([
+              hc,
+              new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000))
+            ]);
+            const auth = Array.isArray(result) ? result[0] : result?.options?.auth;
+            if (auth && typeof auth.getAccessToken === 'function') return auth;
+          }
+        } catch(e) { console.debug('[IrrPro] hassConnection:', e.message); }
+
+        // 2) <home-assistant> element in parent DOM
+        try {
           const ha = window.parent.document.querySelector('home-assistant');
-          if (ha && ha.hass && ha.hass.auth) {
-            return await ha.hass.auth.getAccessToken();
-          }
-        }
-      } catch(e) { /* cross-origin or element not found */ }
+          if (ha?.hass?.auth?.getAccessToken) return ha.hass.auth;
+        } catch(e) { console.debug('[IrrPro] ha-element:', e.message); }
+      }
 
-      // Method 2: Parse localStorage (same origin – token might be slightly stale)
+      // 3) Manually stored long-lived token (set via the auth-error banner)
+      const manual = localStorage.getItem('irrigationpro_token');
+      if (manual) {
+        // Wrap as minimal auth object
+        return { getAccessToken: async () => manual, _manual: true };
+      }
+
+      return null;
+    }
+
+    async function getAccessToken() {
+      // Re-use cached auth (handles expiry / refresh internally)
+      if (_auth) {
+        try { return await _auth.getAccessToken(); }
+        catch(e) { _auth = null; _authPromise = null; }
+      }
+
+      if (!_authPromise) _authPromise = _resolveAuth();
+      _auth = await _authPromise;
+
+      if (_auth) {
+        try { return await _auth.getAccessToken(); }
+        catch(e) { _auth = null; _authPromise = null; return null; }
+      }
+
+      // 4) localStorage hassTokens – only use if not expired
       try {
-        const stored = localStorage.getItem('hassTokens');
-        if (stored) {
-          const data = JSON.parse(stored);
-          if (data.access_token) return data.access_token;
+        const raw = localStorage.getItem('hassTokens');
+        if (raw) {
+          const tok = JSON.parse(raw);
+          if (tok.access_token && (tok.expires_at || 0) > (Date.now() / 1000 + 60)) {
+            return tok.access_token;
+          }
         }
       } catch(e) {}
 
-      // Method 3: Try hassConnection options
-      try {
-        if (window.parent && window.parent.hassConnection) {
-          const conn = await window.parent.hassConnection;
-          const auth = Array.isArray(conn) ? conn[0] : conn.options?.auth;
-          if (auth) {
-            if (typeof auth.getAccessToken === 'function') return await auth.getAccessToken();
-            if (auth.data?.access_token) return auth.data.access_token;
-          }
-        }
-      } catch(e) {}
-
-      return '';
+      return null;
     }
 
     async function authHeaders() {
       const token = await getAccessToken();
-      if (!token) console.warn('IrrigationPro: No HA auth token found – API calls may fail with 401');
       return {
-        'Authorization': 'Bearer ' + token,
+        'Authorization': 'Bearer ' + (token || ''),
         'Content-Type': 'application/json'
       };
     }
 
+    // Resets the auth cache so next request tries fresh (called after 401)
+    function resetAuth() {
+      _auth = null;
+      _authPromise = null;
+    }
+
+    // ── Auth-Error Banner ────────────────────────────────────────────────────
+    function showAuthBanner() {
+      if (document.getElementById('authBanner')) return;
+      const b = document.createElement('div');
+      b.id = 'authBanner';
+      b.style.cssText = [
+        'position:sticky;top:0;z-index:500;padding:14px 20px;',
+        'background:#f44336;color:#fff;border-radius:0 0 12px 12px;',
+        'display:flex;align-items:center;gap:12px;flex-wrap:wrap;'
+      ].join('');
+      b.innerHTML = `
+        <span style="flex:1;font-size:14px;">
+          🔐 <strong>Authentifizierung fehlgeschlagen (401).</strong>
+          Erstelle in HA unter <em>Profil → Sicherheit → Langlebige Zugriffstoken</em> einen Token.
+        </span>
+        <input id="manualTokenInput" type="password" placeholder="Token einfügen…"
+               style="padding:6px 10px;border-radius:6px;border:none;font-size:13px;width:280px;min-width:140px;">
+        <button onclick="saveManualToken()"
+                style="padding:6px 14px;border-radius:6px;border:none;background:#fff;color:#f44336;font-weight:700;cursor:pointer;">
+          Speichern
+        </button>
+        <button onclick="document.getElementById('authBanner').remove()"
+                style="padding:6px 10px;border-radius:6px;border:none;background:rgba(255,255,255,0.2);color:#fff;cursor:pointer;">
+          ✕
+        </button>`;
+      document.body.prepend(b);
+    }
+
+    function hideAuthBanner() {
+      const b = document.getElementById('authBanner');
+      if (b) b.remove();
+    }
+
+    function saveManualToken() {
+      const val = (document.getElementById('manualTokenInput')?.value || '').trim();
+      if (!val) return;
+      localStorage.setItem('irrigationpro_token', val);
+      resetAuth();
+      _consecutiveAuthErrors = 0;
+      hideAuthBanner();
+      loadData();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
     function weatherIcon(condition) {
       const icons = {
         'sunny': '☀️', 'clear-night': '🌙', 'partlycloudy': '⛅',
@@ -476,10 +558,8 @@
       const now = new Date();
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
-
       const dateStr = d.toLocaleDateString('de-DE', {weekday: 'short', day: '2-digit', month: '2-digit'});
       const timeStr = d.toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
-
       if (d.toDateString() === now.toDateString()) return 'Heute ' + timeStr;
       if (d.toDateString() === tomorrow.toDateString()) return 'Morgen ' + timeStr;
       return dateStr + ' ' + timeStr;
@@ -496,23 +576,48 @@
       toast.className = 'toast ' + type;
       toast.textContent = message;
       document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+      setTimeout(() => toast.remove(), 3500);
     }
 
+    // ── Data loading ──────────────────────────────────────────────────────────
     async function loadData() {
       try {
         const resp = await fetch(API_BASE + '/status', { headers: await authHeaders() });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status + (resp.status === 401 ? ' (Kein Auth-Token)' : ''));
+
+        if (resp.status === 401) {
+          _consecutiveAuthErrors++;
+          resetAuth();
+          if (_consecutiveAuthErrors >= 2) {
+            // Stop hammering HA – pause auto-refresh and show banner
+            clearInterval(refreshTimer);
+            refreshTimer = null;
+            showAuthBanner();
+            document.getElementById('lastUpdate').textContent = '⚠️ Auth-Fehler – Auto-Refresh pausiert';
+          }
+          return;
+        }
+
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+        // Successful response – clear error state
+        _consecutiveAuthErrors = 0;
+        hideAuthBanner();
+        if (!refreshTimer) {
+          refreshTimer = setInterval(loadData, 30000);
+        }
+
         const data = await resp.json();
         renderData(data);
         document.getElementById('lastUpdate').textContent =
           'Auto-Refresh aktiv · ' + new Date().toLocaleTimeString('de-DE');
+
       } catch(err) {
-        console.error('Load error:', err);
+        console.error('[IrrPro] Load error:', err);
         showToast('Fehler beim Laden: ' + err.message, 'error');
       }
     }
 
+    // ── Render ────────────────────────────────────────────────────────────────
     function renderData(data) {
       if (!data.entries || data.entries.length === 0) {
         document.getElementById('zonesContainer').innerHTML =
@@ -522,7 +627,6 @@
 
       const entry = data.entries[0];
 
-      // Status bar
       document.getElementById('nextScheduled').textContent =
         entry.scheduled_run ? formatDate(entry.scheduled_run) : 'Nicht geplant';
       document.getElementById('activeZones').textContent =
@@ -530,19 +634,19 @@
       document.getElementById('dataUpdate').textContent =
         entry.last_update ? formatDate(entry.last_update) : '--';
 
-      // Show reason why no schedule
-      let scheduleReasonEl = document.getElementById('scheduleReason');
-      if (!scheduleReasonEl) {
-        scheduleReasonEl = document.createElement('div');
-        scheduleReasonEl.id = 'scheduleReason';
-        scheduleReasonEl.style.cssText = 'font-size:13px;color:var(--text-secondary);margin-top:6px;padding:8px 12px;background:rgba(244,67,54,0.07);border-radius:8px;display:none;';
-        document.getElementById('statusBar').after(scheduleReasonEl);
+      // Reason why no schedule
+      let srEl = document.getElementById('scheduleReason');
+      if (!srEl) {
+        srEl = document.createElement('div');
+        srEl.id = 'scheduleReason';
+        srEl.style.cssText = 'font-size:13px;color:var(--text-secondary);padding:8px 12px;background:rgba(244,67,54,0.07);border-radius:8px;display:none;margin-bottom:12px;';
+        document.getElementById('statusBar').after(srEl);
       }
       if (!entry.scheduled_run && entry.schedule_reason) {
-        scheduleReasonEl.textContent = 'ℹ️ ' + entry.schedule_reason;
-        scheduleReasonEl.style.display = 'block';
+        srEl.textContent = 'ℹ️ ' + entry.schedule_reason;
+        srEl.style.display = 'block';
       } else {
-        scheduleReasonEl.style.display = 'none';
+        srEl.style.display = 'none';
       }
 
       // Zone cards
@@ -566,15 +670,12 @@
               <span class="card-title">💧 ${zone.name}</span>
               <span class="zone-status ${statusClass}">${statusText}</span>
             </div>
-
             <div class="entity-state">
               <span class="dot ${entityDot}"></span>
               <span style="flex:1">${entityLabel}</span>
               <strong>${entityStateText}</strong>
             </div>
-
             ${skipReasonHtml}
-
             <div class="info-grid">
               <div class="info-item">
                 <span class="info-label">Dauer</span>
@@ -609,7 +710,6 @@
                 <span class="info-value">${zone.next_run ? formatDate(zone.next_run) : '--'}</span>
               </div>
             </div>
-
             <div class="card-actions">
               ${zone.is_running
                 ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'stop')">⏹ Stopp</button>`
@@ -618,8 +718,7 @@
               }
               ${toggleBtn}
             </div>
-          </div>
-        `;
+          </div>`;
       }
       document.getElementById('zonesContainer').innerHTML = html;
 
@@ -634,34 +733,23 @@
             <tr>
               <td><strong>${formatDateShort(f.date)}</strong></td>
               <td><span class="weather-icon">${weatherIcon(f.condition)}</span></td>
-              <td>${f.min_temp}°</td>
-              <td>${f.max_temp}°</td>
-              <td>${f.humidity}%</td>
-              <td>${f.wind_speed}</td>
+              <td>${f.min_temp}°</td><td>${f.max_temp}°</td>
+              <td>${f.humidity}%</td><td>${f.wind_speed}</td>
               <td>${f.rain > 0 ? '🌧 ' + f.rain : '0'}</td>
               <td><strong>${f.eto}</strong></td>
-              <td>
-                <div class="eto-bar">
-                  <div class="eto-bar-fill" style="width:${etoPercent}%;background:${etoColor}"></div>
-                </div>
-              </td>
-            </tr>
-          `;
+              <td><div class="eto-bar"><div class="eto-bar-fill" style="width:${etoPercent}%;background:${etoColor}"></div></div></td>
+            </tr>`;
         }
         document.getElementById('forecastBody').innerHTML = fHtml;
       }
     }
 
+    // ── Zone control ──────────────────────────────────────────────────────────
     async function controlZone(zoneId, action) {
       const durationEl = document.getElementById('dur_' + zoneId);
       const dur = durationEl ? parseInt(durationEl.value, 10) || 10 : 10;
       const btn = document.getElementById('btn_' + zoneId);
-
-      // Visual loading state
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = action === 'start' ? '⏳ Startet…' : '⏳ Stoppt…';
-      }
+      if (btn) { btn.disabled = true; btn.textContent = action === 'start' ? '⏳ Startet…' : '⏳ Stoppt…'; }
 
       try {
         const resp = await fetch(API_BASE + '/zone/' + action, {
@@ -669,53 +757,43 @@
           headers: await authHeaders(),
           body: JSON.stringify({ zone_id: zoneId, duration: dur })
         });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const result = await resp.json();
-        showToast(
-          action === 'start' ? `Zone ${zoneId} gestartet (${dur} min)` : `Zone ${zoneId} gestoppt`,
-          'success'
-        );
-        // Refresh data to show new state (zone card re-renders)
+        showToast(action === 'start' ? `Zone ${zoneId} gestartet (${dur} min)` : `Zone ${zoneId} gestoppt`, 'success');
         setTimeout(loadData, 800);
       } catch(err) {
         if (btn) { btn.disabled = false; btn.textContent = action === 'start' ? '▶ Start' : '⏹ Stopp'; }
         showToast('Fehler: ' + err.message, 'error');
-        console.error('controlZone error:', err);
       }
     }
 
     async function toggleZoneEnabled(zoneId, enable) {
-      const action = enable ? 'enable' : 'disable';
       try {
-        const resp = await fetch(API_BASE + '/zone/' + action, {
+        const resp = await fetch(API_BASE + '/zone/' + (enable ? 'enable' : 'disable'), {
           method: 'POST',
           headers: await authHeaders(),
           body: JSON.stringify({ zone_id: zoneId })
         });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         showToast(enable ? `Zone ${zoneId} aktiviert` : `Zone ${zoneId} deaktiviert`, 'success');
         setTimeout(loadData, 500);
-      } catch(err) {
-        showToast('Fehler: ' + err.message, 'error');
-        console.error('toggleZoneEnabled error:', err);
-      }
+      } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
     }
 
     async function recalculate() {
       try {
         const resp = await fetch(API_BASE + '/recalculate', {
-          method: 'POST',
-          headers: await authHeaders()
+          method: 'POST', headers: await authHeaders()
         });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         showToast('Neuberechnung gestartet', 'success');
         setTimeout(loadData, 3000);
-      } catch(err) {
-        showToast('Fehler: ' + err.message, 'error');
-      }
+      } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
     }
 
-    // Initial load and auto-refresh every 30 seconds
+    // ── Startup ───────────────────────────────────────────────────────────────
     loadData();
     refreshTimer = setInterval(loadData, 30000);
   </script>
