@@ -62,6 +62,11 @@ from .weather_provider import WeatherData, WeatherProvider
 
 _LOGGER = logging.getLogger(__name__)
 
+_WEEKDAYS_DE = [
+    "Montag", "Dienstag", "Mittwoch", "Donnerstag",
+    "Freitag", "Samstag", "Sonntag",
+]
+
 
 class ZoneData:
     """Data for a single irrigation zone."""
@@ -125,6 +130,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self.history: list[dict] = []  # Irrigation & skip history (max 180 entries)
         self.last_calculated: datetime | None = None  # When the schedule was last calculated
         self._daily_report_unsub = None
+        self._watering_started_at: datetime | None = None
         
         # Validate configuration
         if not entry.data.get(CONF_WEATHER_ENTITY):
@@ -489,15 +495,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     async def _run_watering_cycle(self):
         """Run the complete watering cycle for all zones."""
         cycles = self.entry.data.get(CONF_CYCLES, 2)
-        
+        self._watering_started_at = dt_util.now()
         _LOGGER.info("Starting watering cycle (1/%d)", cycles)
-        
-        # Send start notification
-        await self._send_pushover_notification(
-            f"🚿 Bewässerung gestartet",
-            f"Starte Bewässerungszyklus ({cycles} Durchgänge)",
-            priority=0
-        )
         
         try:
             for cycle in range(cycles):
@@ -509,16 +508,27 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                         await self._water_zone(zone)
             
             _LOGGER.info("Watering cycle completed")
+            finished_at = dt_util.now()
 
-            # Send completion notification with per-zone details
-            cycles = self.entry.data.get(CONF_CYCLES, 2)
-            zones_watered = [(z.name, z.duration) for z in self.zones if z.enabled and z.duration > 0]
-            zone_lines = "\n".join([f"\u2022 {name}: {dur:.0f} min" for name, dur in zones_watered])
-            total_actual = sum(d for _, d in zones_watered) * cycles
+            # Build rich completion notification
+            actual_min = (finished_at - self._watering_started_at).total_seconds() / 60
+            zone_lines = self._format_zone_lines("\u2705")
+
+            if self.recheck_scheduled:
+                next_calc = f"N\u00e4chste Berechnung: {self._fmt_dt(self.recheck_scheduled)}"
+            else:
+                next_calc = "Keine weitere Neuberechnung geplant"
+
+            message = (
+                f"Start: {self._fmt_dt(self._watering_started_at)}\n"
+                f"Ende:  {self._fmt_dt(finished_at)}\n"
+                f"Gesamtdauer: {self._fmt_duration(actual_min)} min.\n\n"
+                f"{zone_lines}\n\n"
+                f"{next_calc}\n\n"
+                f"{self._format_weather_footer()}"
+            )
             await self._send_pushover_notification(
-                "\u2705 Bew\u00e4sserung abgeschlossen",
-                f"Alle Zonen bew\u00e4ssert ({cycles} Zyklen), gesamt ~{total_actual:.0f} min:\n{zone_lines}",
-                priority=0,
+                "\u2705 Bew\u00e4sserung abgeschlossen", message, priority=0
             )
 
             # Update last run times
@@ -534,23 +544,15 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             
         except Exception as err:
             _LOGGER.error("Error during watering cycle: %s", err)
-            # Send error notification
             await self._send_pushover_notification(
-                f"❌ Bewässerungsfehler",
-                f"Fehler beim Bewässern: {err}",
+                "\u274c Bew\u00e4sserungsfehler",
+                f"Fehler beim Bew\u00e4ssern: {err}",
                 priority=1
             )
 
     async def _water_zone(self, zone: ZoneData):
         """Water a single zone."""
         _LOGGER.info("Starting zone '%s' for %.1f minutes", zone.name, zone.duration)
-        
-        # Send zone start notification
-        await self._send_pushover_notification(
-            f"💧 Zone '{zone.name}' gestartet",
-            f"Bewässere für {zone.duration:.1f} Minuten (ETo: {zone.eto_total:.1f}mm)",
-            priority=-1  # Low priority for individual zones
-        )
         
         zone.is_running = True
         zone.started_at = dt_util.now()
@@ -669,6 +671,54 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             
             self.async_set_updated_data(self.data)
 
+    # ------------------------------------------------------------------
+    # Notification helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _fmt_duration(minutes: float) -> str:
+        """Format minutes as MM:SS string (e.g. 06:42)."""
+        total_sec = int(round(minutes * 60))
+        return f"{total_sec // 60:02d}:{total_sec % 60:02d}"
+
+    def _format_zone_lines(self, prefix: str = "\u2022") -> str:
+        """Format per-zone watering times for a notification message."""
+        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        lines = []
+        for z in self.zones:
+            if z.enabled and z.duration > 0:
+                total = self._fmt_duration(z.duration * cycles)
+                per_c = self._fmt_duration(z.duration)
+                lines.append(
+                    f"{prefix} {z.name}: {total} min.  ({cycles}\u00d7 {per_c} min.)"
+                )
+        return "\n".join(lines) if lines else "Keine Zonen konfiguriert"
+
+    def _format_weather_footer(self) -> str:
+        """Build a compact weather summary block for notifications."""
+        if not self.forecast:
+            return ""
+        d = self.forecast[0]
+        day_name = _WEEKDAYS_DE[d.sunrise.weekday()] if d.sunrise else ""
+        condition = d.condition or d.summary or ""
+        clouds = f"{d.clouds:.0f}" if d.clouds is not None else "?"
+        sunrise_str = d.sunrise.strftime("%H:%M") if d.sunrise else "?"
+        return (
+            "\u2500\u2500\u2500\n"
+            f"{day_name}: {condition}, {clouds}% Wolken\n"
+            f"Sonnenaufgang: {sunrise_str} Uhr | Luftfeuchte: {d.humidity:.0f}%\n"
+            f"Temp.: {d.min_temp:.1f}\u00b0C \u2013 {d.max_temp:.1f}\u00b0C\n"
+            f"Luftdruck: {d.pressure:.0f}\u202fhPa | Wind: {d.wind_speed:.1f}\u202fm/s\n"
+            f"Niederschlag: {d.rain:.2f}\u202fmm | ETo: {d.eto:.2f}\u202fmm"
+        )
+
+    def _fmt_dt(self, dt: datetime) -> str:
+        """Format datetime as 'Wochentag DD.MM.YYYY, HH:MM Uhr'."""
+        local = dt.astimezone(dt_util.now().tzinfo)
+        return f"{_WEEKDAYS_DE[local.weekday()]} {local.strftime('%d.%m.%Y, %H:%M')} Uhr"
+
+    # ------------------------------------------------------------------
+
     def _setup_daily_report(self) -> None:
         """Register (or re-register) the daily morning report timer."""
         if self._daily_report_unsub:
@@ -683,28 +733,53 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Daily report scheduled at %02d:00", hour)
 
     async def _async_send_daily_report(self, _now=None) -> None:
-        """Send the daily morning report via the configured notify service."""
+        """Send the daily morning report (geplant or keine Bewässerung) with full weather data."""
         cycles = self.entry.data.get(CONF_CYCLES, 2)
+        weather = self._format_weather_footer()
+
         if self.scheduled_run:
-            local_start = self.scheduled_run.astimezone(dt_util.now().tzinfo)
-            zones_info = [
-                f"\u2022 {z.name}: {z.duration * cycles:.0f} min"
-                for z in self.zones if z.enabled and z.duration > 0
-            ]
+            total_min = sum(
+                z.duration * cycles for z in self.zones if z.enabled and z.duration > 0
+            )
+            end_time = self.scheduled_run + timedelta(minutes=total_min)
+            zone_lines = self._format_zone_lines("\U0001f331")
+
+            if self.recheck_scheduled:
+                recheck_str = (
+                    f"Recheck: {self._fmt_dt(self.recheck_scheduled)}"
+                )
+            else:
+                recheck_str = "Kein weiterer Recheck vor Start"
+
             message = (
-                f"Start: {local_start.strftime('%H:%M')} Uhr\n"
-                + "\n".join(zones_info or ["Keine Zonen konfiguriert"])
-                + f"\n({cycles} Zyklen)"
+                f"Start: {self._fmt_dt(self.scheduled_run)}\n"
+                f"Ende:  {self._fmt_dt(end_time)}\n"
+                f"Gesamtdauer: {self._fmt_duration(total_min)} min.\n\n"
+                f"{zone_lines}\n\n"
+                f"{recheck_str}\n\n"
+                f"{weather}"
             )
             await self._send_pushover_notification(
-                "\U0001f331 Bew\u00e4sserungsplan heute", message, priority=-1
+                "\U0001f5d3 Bew\u00e4sserung geplant", message, priority=-1
             )
         else:
             reason = self.schedule_reason or "Kein Bew\u00e4sserungsbedarf"
+
+            if self.recheck_scheduled:
+                next_calc = (
+                    f"N\u00e4chste Berechnung:\n"
+                    f"{self._fmt_dt(self.recheck_scheduled)}"
+                )
+            else:
+                next_calc = "Keine weitere Neuberechnung geplant"
+
+            message = (
+                f"Kein Zeitplan gesetzt:\n\u203a {reason}\n\n"
+                f"{next_calc}\n\n"
+                f"{weather}"
+            )
             await self._send_pushover_notification(
-                "\U0001f331 Heute keine Bew\u00e4sserung",
-                f"Grund: {reason}",
-                priority=-2,
+                "\U0001f4a4 Keine Bew\u00e4sserung heute", message, priority=-2
             )
 
     def _log_zone_run(
