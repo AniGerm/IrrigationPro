@@ -263,7 +263,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         # Get configuration
         sunrise_offset = self.entry.data.get(CONF_SUNRISE_OFFSET, 0)
-        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        cycles = int(self.entry.data.get(CONF_CYCLES, 2))
         low_threshold = self.entry.data.get(CONF_LOW_THRESHOLD, 5)
         high_threshold = self.entry.data.get(CONF_HIGH_THRESHOLD, 15)
         
@@ -494,7 +494,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
     async def _run_watering_cycle(self):
         """Run the complete watering cycle for all zones."""
-        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        cycles = int(self.entry.data.get(CONF_CYCLES, 2))
         self._watering_started_at = dt_util.now()
         _LOGGER.info("Starting watering cycle (1/%d)", cycles)
         
@@ -547,7 +547,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             await self._send_pushover_notification(
                 "\u274c Bew\u00e4sserungsfehler",
                 f"Fehler beim Bew\u00e4ssern: {err}",
-                priority=1
+                priority=0
             )
 
     async def _water_zone(self, zone: ZoneData):
@@ -683,7 +683,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
     def _format_zone_lines(self, prefix: str = "\u2022") -> str:
         """Format per-zone watering times for a notification message."""
-        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        cycles = int(self.entry.data.get(CONF_CYCLES, 2))
         lines = []
         for z in self.zones:
             if z.enabled and z.duration > 0:
@@ -698,19 +698,30 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         """Build a compact weather summary block for notifications."""
         if not self.forecast:
             return ""
-        d = self.forecast[0]
-        day_name = _WEEKDAYS_DE[d.sunrise.weekday()] if d.sunrise else ""
-        condition = d.condition or d.summary or ""
-        clouds = f"{d.clouds:.0f}" if d.clouds is not None else "?"
-        sunrise_str = d.sunrise.strftime("%H:%M") if d.sunrise else "?"
-        return (
-            "\u2500\u2500\u2500\n"
-            f"{day_name}: {condition}, {clouds}% Wolken\n"
-            f"Sonnenaufgang: {sunrise_str} Uhr | Luftfeuchte: {d.humidity:.0f}%\n"
-            f"Temp.: {d.min_temp:.1f}\u00b0C \u2013 {d.max_temp:.1f}\u00b0C\n"
-            f"Luftdruck: {d.pressure:.0f}\u202fhPa | Wind: {d.wind_speed:.1f}\u202fm/s\n"
-            f"Niederschlag: {d.rain:.2f}\u202fmm | ETo: {d.eto:.2f}\u202fmm"
-        )
+        try:
+            d = self.forecast[0]
+            day_name = _WEEKDAYS_DE[d.sunrise.weekday()] if d.sunrise else ""
+            condition = d.condition or d.summary or ""
+            clouds = f"{d.clouds:.0f}" if d.clouds is not None else "?"
+            sunrise_str = d.sunrise.strftime("%H:%M") if d.sunrise else "?"
+            humidity = d.humidity if d.humidity is not None else 0
+            min_t = d.min_temp if d.min_temp is not None else 0
+            max_t = d.max_temp if d.max_temp is not None else 0
+            pressure = d.pressure if d.pressure is not None else 0
+            wind = d.wind_speed if d.wind_speed is not None else 0
+            rain = d.rain if d.rain is not None else 0
+            eto = d.eto if d.eto is not None else 0
+            return (
+                "\u2500\u2500\u2500\n"
+                f"{day_name}: {condition}, {clouds}% Wolken\n"
+                f"Sonnenaufgang: {sunrise_str} Uhr | Luftfeuchte: {humidity:.0f}%\n"
+                f"Temp.: {min_t:.1f}\u00b0C \u2013 {max_t:.1f}\u00b0C\n"
+                f"Luftdruck: {pressure:.0f}\u202fhPa | Wind: {wind:.1f}\u202fm/s\n"
+                f"Niederschlag: {rain:.2f}\u202fmm | ETo: {eto:.2f}\u202fmm"
+            )
+        except Exception as err:
+            _LOGGER.warning("Failed to format weather footer: %s", err)
+            return ""
 
     def _fmt_dt(self, dt: datetime) -> str:
         """Format datetime as 'Wochentag DD.MM.YYYY, HH:MM Uhr'."""
@@ -734,7 +745,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
     async def _async_send_daily_report(self, _now=None) -> None:
         """Send the daily morning report (geplant or keine Bewässerung) with full weather data."""
-        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        cycles = int(self.entry.data.get(CONF_CYCLES, 2))
         weather = self._format_weather_footer()
 
         if self.scheduled_run:
@@ -886,7 +897,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         real_forecast = self.forecast
         self.forecast = fake_forecast
 
-        cycles = self.entry.data.get(CONF_CYCLES, 2)
+        cycles = int(self.entry.data.get(CONF_CYCLES, 2))
         sunrise_offset = self.entry.data.get(CONF_SUNRISE_OFFSET, 0)
 
         zone_results = []
