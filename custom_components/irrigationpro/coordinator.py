@@ -633,9 +633,36 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         _LOGGER.info("Manual start of zone '%s' for %d minutes", zone.name, duration)
         zone.duration = duration
+
+        await self._send_pushover_notification(
+            "\U0001f6bf Manuelle Bew\u00e4sserung",
+            f"Zone \u00ab{zone.name}\u00bb manuell gestartet\n"
+            f"Geplante Dauer: {self._fmt_duration(duration)} min.",
+            priority=-1,
+        )
+
         # Run in background so the API can respond immediately
-        task = asyncio.create_task(self._water_zone(zone))
+        task = asyncio.create_task(self._water_zone_manual(zone))
         self._manual_zone_tasks[zone_id] = task
+
+    async def _water_zone_manual(self, zone: ZoneData):
+        """Wrapper around _water_zone that sends a summary notification when done."""
+        started = dt_util.now()
+        try:
+            await self._water_zone(zone)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            ended = dt_util.now()
+            actual_min = (ended - started).total_seconds() / 60
+            await self._send_pushover_notification(
+                "\u2705 Manuelle Bew\u00e4sserung beendet",
+                f"Zone \u00ab{zone.name}\u00bb beendet\n"
+                f"Laufzeit: {self._fmt_duration(actual_min)} min.\n"
+                f"Start: {self._fmt_dt(started)}\n"
+                f"Ende:  {self._fmt_dt(ended)}",
+                priority=-1,
+            )
 
     async def async_stop_zone(self, zone_id: int):
         """Stop a running zone."""
