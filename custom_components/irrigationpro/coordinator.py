@@ -67,6 +67,32 @@ _WEEKDAYS_DE = [
     "Freitag", "Samstag", "Sonntag",
 ]
 
+_WEATHER_CONDITION_DE = {
+    "clear": "klar",
+    "sunny": "sonnig",
+    "partlycloudy": "teilweise bewölkt",
+    "partly cloudy": "teilweise bewölkt",
+    "cloudy": "bewölkt",
+    "overcast": "bedeckt",
+    "rain": "Regen",
+    "rainy": "regnerisch",
+    "pouring": "starker Regen",
+    "showers": "Schauer",
+    "light rain": "leichter Regen",
+    "moderate rain": "mäßiger Regen",
+    "heavy rain": "starker Regen",
+    "snow": "Schnee",
+    "snowy": "schneit",
+    "snowy-rainy": "Schneeregen",
+    "hail": "Hagel",
+    "fog": "Nebel",
+    "mist": "Dunst",
+    "windy": "windig",
+    "thunderstorm": "Gewitter",
+    "lightning": "Blitze",
+    "unknown": "unbekannt",
+}
+
 
 class ZoneData:
     """Data for a single irrigation zone."""
@@ -515,9 +541,16 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             zone_lines = self._format_zone_lines("\u2705")
 
             if self.recheck_scheduled:
-                next_calc = f"N\u00e4chste Berechnung: {self._fmt_dt(self.recheck_scheduled)}"
+                next_calc = (
+                    f"Nächste Neuberechnung vor geplantem Lauf: "
+                    f"{self._fmt_dt(self.recheck_scheduled)}"
+                )
             else:
-                next_calc = "Keine weitere Neuberechnung geplant"
+                next_calc = (
+                    "Keine zusätzliche Neuberechnung vor einem geplanten Lauf.\n"
+                    f"Reguläres Wetter-Update und Neuplanung alle "
+                    f"{UPDATE_INTERVAL_MINUTES} Minuten."
+                )
 
             message = (
                 f"Start: {self._fmt_dt(self._watering_started_at)}\n"
@@ -728,7 +761,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         try:
             d = self.forecast[0]
             day_name = _WEEKDAYS_DE[d.sunrise.weekday()] if d.sunrise else ""
-            condition = d.condition or d.summary or ""
+            raw_condition = (d.condition or d.summary or "").strip()
+            condition = _WEATHER_CONDITION_DE.get(raw_condition.lower(), raw_condition)
             clouds = f"{d.clouds:.0f}" if d.clouds is not None else "?"
             sunrise_str = d.sunrise.strftime("%H:%M") if d.sunrise else "?"
             humidity = d.humidity if d.humidity is not None else 0
@@ -784,10 +818,15 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
             if self.recheck_scheduled:
                 recheck_str = (
-                    f"Recheck: {self._fmt_dt(self.recheck_scheduled)}"
+                    f"Zusätzliche Neuberechnung vor Start: "
+                    f"{self._fmt_dt(self.recheck_scheduled)}"
                 )
             else:
-                recheck_str = "Kein weiterer Recheck vor Start"
+                recheck_str = (
+                    "Keine zusätzliche Neuberechnung vor Start.\n"
+                    f"Reguläres Wetter-Update und Neuplanung alle "
+                    f"{UPDATE_INTERVAL_MINUTES} Minuten."
+                )
 
             message = (
                 f"Start: {self._fmt_dt(self.scheduled_run)}\n"
@@ -805,11 +844,16 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
             if self.recheck_scheduled:
                 next_calc = (
-                    f"N\u00e4chste Berechnung:\n"
-                    f"{self._fmt_dt(self.recheck_scheduled)}"
+                    f"Nächste zusätzliche Neuberechnung:\n"
+                    f"{self._fmt_dt(self.recheck_scheduled)}\n"
+                    f"(zusätzlich zum regulären Update alle {UPDATE_INTERVAL_MINUTES} Minuten)"
                 )
             else:
-                next_calc = "Keine weitere Neuberechnung geplant"
+                next_calc = (
+                    "Keine zusätzliche Neuberechnung für heute geplant.\n"
+                    f"Automatische Neuplanung beim nächsten Wetter-Update "
+                    f"(alle {UPDATE_INTERVAL_MINUTES} Minuten)."
+                )
 
             message = (
                 f"Kein Zeitplan gesetzt:\n\u203a {reason}\n\n"
