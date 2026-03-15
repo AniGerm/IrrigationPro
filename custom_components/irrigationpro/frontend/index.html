@@ -408,6 +408,33 @@
     .result-skip { color: var(--text-secondary); font-style: italic; }
 
     /* History modal */
+    .hcal-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .hcal-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .hcal-months {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .hcal-month-chip {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.05);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
     .hcal {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -447,10 +474,37 @@
     .hcal-day.hcal-nowater { background: rgba(76,175,80,0.12); color: var(--success); cursor: pointer; }
     .hcal-day.hcal-nowater:hover { background: rgba(76,175,80,0.24); }
     .hcal-day.hcal-today { outline: 2px solid var(--primary); outline-offset: -2px; }
+    .hcal-day.hcal-selected {
+      box-shadow: inset 0 0 0 2px var(--primary);
+      transform: translateY(-1px);
+    }
     .hcal-dot { font-size: 10px; }
+    .hcal-month-tag {
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
     .hcal-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin-bottom: 16px; }
     .hcal-legend span { display: flex; align-items: center; gap: 5px; }
     .history-list { max-height: 380px; overflow-y: auto; }
+    .hist-day-group { margin-bottom: 12px; }
+    .hist-day-header {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: linear-gradient(180deg, var(--bg), rgba(255,255,255,0.92));
+      backdrop-filter: blur(8px);
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--text-secondary);
+      padding: 6px 2px 8px;
+      margin-bottom: 6px;
+    }
     .hist-entry {
       padding: 12px 14px;
       border-radius: 10px;
@@ -458,10 +512,16 @@
       font-size: 13px;
       border: 1px solid var(--border);
       line-height: 1.6;
+      scroll-margin-top: 48px;
+      transition: box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
     }
     .hist-entry.hist-run   { background: rgba(33,150,243,0.06); }
     .hist-entry.hist-skip  { background: rgba(255,152,0,0.07); }
     .hist-entry.hist-nowater { background: rgba(76,175,80,0.06); }
+    .hist-entry.hist-focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(33,150,243,0.18);
+    }
     .hist-entry-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .hist-entry-header strong { font-size: 14px; }
     .hist-date { font-size: 12px; color: var(--text-secondary); }
@@ -547,7 +607,7 @@
   <div class="modal-backdrop" id="historyModal" onclick="if(event.target===this)closeHistoryModal()">
     <div class="modal" style="max-width:680px">
       <button class="modal-close" onclick="closeHistoryModal()">✕</button>
-      <div class="modal-title" data-i18n="hist.title">📋 Bewässerungs-Historie</div>
+      <div class="modal-title" data-i18n="hist.title">🗓️ Bewässerungs-Historie</div>
       <div id="historyContent"><em data-i18n="loading.data">Lade Daten...</em></div>
     </div>
   </div>
@@ -556,7 +616,7 @@
     <h1>🌿 IrrigationPro Dashboard</h1>
     <div class="header-actions">
       <span class="auto-refresh" id="lastUpdate">--</span>
-      <button class="btn-test" onclick="openHistoryModal()" title="Historie">📋</button>
+      <button class="btn-test" onclick="openHistoryModal()" title="Historie">🗓️</button>
       <button class="btn-test" onclick="openTestModal()" title="Test-Modus">🧪</button>
       <button class="btn-lang" onclick="toggleLang()" id="langBtn">EN</button>
       <button class="btn btn-primary btn-sm" onclick="recalculate()">
@@ -691,7 +751,8 @@
         'test.min': 'min',
         'test.fake_weather': '☀️ Testklima: 35°C max, 0mm Regen, 30% Feuchte, ETo {eto} mm',
         'no_scheduled': 'Nicht geplant',
-        'hist.title': '📋 Bewässerungs-Historie',
+        'hist.title': '🗓️ Bewässerungs-Historie',
+        'hist.calendar_range': 'Kalenderübersicht',
         'hist.empty': 'Noch keine Bewässerungshistorie vorhanden. Starte eine Zone, damit sie hier erscheint.',
         'hist.legend_run': '💧 Bewässert',
         'hist.legend_skip': '⏭ Übersprungen',
@@ -788,7 +849,8 @@
         'test.min': 'min',
         'test.fake_weather': '☀️ Test climate: 35°C max, 0mm rain, 30% humidity, ETo {eto} mm',
         'no_scheduled': 'Not scheduled',
-        'hist.title': '📋 Irrigation History',
+        'hist.title': '🗓️ Irrigation History',
+        'hist.calendar_range': 'Calendar Overview',
         'hist.empty': 'No irrigation history yet. Start a zone and it will appear here.',
         'hist.legend_run': '💧 Irrigated',
         'hist.legend_skip': '⏭ Skipped',
@@ -1403,7 +1465,28 @@
         ? ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
         : ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-      let calHtml = '<div class="hcal">';
+      const monthLabelFmt = new Intl.DateTimeFormat(lang === 'de' ? 'de-DE' : 'en-GB', {
+        month: 'long', year: 'numeric'
+      });
+      const shortMonthFmt = new Intl.DateTimeFormat(lang === 'de' ? 'de-DE' : 'en-GB', {
+        month: 'short'
+      });
+      const visibleMonths = [];
+      const visibleMonthKeys = new Set();
+      const monthScan = new Date(calStartRaw);
+      while (monthScan <= calEnd) {
+        const key = `${monthScan.getFullYear()}-${monthScan.getMonth()}`;
+        if (!visibleMonthKeys.has(key)) {
+          visibleMonthKeys.add(key);
+          visibleMonths.push(monthLabelFmt.format(monthScan));
+        }
+        monthScan.setMonth(monthScan.getMonth() + 1, 1);
+      }
+
+      let calHtml = `<div class="hcal-toolbar">
+        <div class="hcal-title">🗓️ ${t('hist.calendar_range')}</div>
+        <div class="hcal-months">${visibleMonths.map(m => `<span class="hcal-month-chip">${m}</span>`).join('')}</div>
+      </div><div class="hcal">`;
       // Header row
       for (const d of weekDayLabels) calHtml += `<div class="hcal-hdr">${d}</div>`;
 
@@ -1445,8 +1528,12 @@
         const titleAttr = titleParts.length ? ` title="${titleParts.join('\n').replace(/"/g,'&quot;')}"` : '';
         const todayCls = isToday ? ' hcal-today' : '';
         const dayNum = cur.getDate();
+        const monthTag = dayNum === 1 ? `<span class="hcal-month-tag">${shortMonthFmt.format(cur)}</span>` : '';
+        const clickable = !isFuture && dayEvents.length > 0;
+        const dataAttr = clickable ? ` data-date="${iso}"` : '';
 
-        calHtml += `<div class="hcal-day ${cls}${todayCls}"${titleAttr}>
+        calHtml += `<div class="hcal-day ${cls}${todayCls}"${titleAttr}${dataAttr}>
+          ${monthTag}
           <span style="font-size:10px">${dayNum}</span>
           ${dot ? `<span class="hcal-dot">${dot}</span>` : ''}
           ${label ? `<span style="font-size:9px;font-weight:700">${label}</span>` : ''}
@@ -1464,17 +1551,30 @@
       </div>`;
 
       // ── Detailed list ─────────────────────────────────────────────────────
-      let listHtml = '<div class="history-list">';
+      let listHtml = '<div class="history-list" id="historyList">';
+      let currentDateGroup = null;
+      const dayHeaderFmt = new Intl.DateTimeFormat(lang === 'de' ? 'de-DE' : 'en-GB', {
+        weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+      });
       for (const entry of entries) {
         const ts = entry.ts_start || entry.ts || entry.date;
+        const groupDate = entry.date || (ts ? new Date(ts).toISOString().slice(0,10) : 'unknown');
         const dateLabel = ts ? new Date(ts).toLocaleString(lang === 'de' ? 'de-DE' : 'en-GB', {
           weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric',
           hour: '2-digit', minute: '2-digit'
         }) : entry.date;
 
+        if (groupDate !== currentDateGroup) {
+          if (currentDateGroup !== null) listHtml += '</div>';
+          currentDateGroup = groupDate;
+          const dayHeaderDate = groupDate !== 'unknown' ? new Date(groupDate + 'T12:00:00') : null;
+          const dayHeaderLabel = dayHeaderDate ? dayHeaderFmt.format(dayHeaderDate) : groupDate;
+          listHtml += `<div class="hist-day-group" data-date-group="${groupDate}"><div class="hist-day-header">${dayHeaderLabel}</div>`;
+        }
+
         if (entry.type === 'zone_run') {
           const isShortened = entry.duration_actual < entry.duration_planned - 0.5;
-          listHtml += `<div class="hist-entry hist-run">
+          listHtml += `<div class="hist-entry hist-run" data-date="${groupDate}">
             <div class="hist-entry-header">
               <strong>${t('hist.zone_run')}: ${entry.zone_name}</strong>
               <span class="hist-date">${dateLabel}</span>
@@ -1489,7 +1589,7 @@
             </div>
           </div>`;
         } else if (entry.type === 'skip') {
-          listHtml += `<div class="hist-entry hist-skip">
+          listHtml += `<div class="hist-entry hist-skip" data-date="${groupDate}">
             <div class="hist-entry-header">
               <strong>${t('hist.skipped')}</strong>
               <span class="hist-date">${dateLabel}</span>
@@ -1502,7 +1602,7 @@
             </div>
           </div>`;
         } else if (entry.type === 'no_water') {
-          listHtml += `<div class="hist-entry hist-nowater">
+          listHtml += `<div class="hist-entry hist-nowater" data-date="${groupDate}">
             <div class="hist-entry-header">
               <strong>${t('hist.no_water')}</strong>
               <span class="hist-date">${dateLabel}</span>
@@ -1516,9 +1616,27 @@
           </div>`;
         }
       }
+      if (currentDateGroup !== null) listHtml += '</div>';
       listHtml += '</div>';
 
       container.innerHTML = calHtml + listHtml;
+
+      const historyList = document.getElementById('historyList');
+      const focusDateInList = (isoDate) => {
+        const target = historyList?.querySelector(`.hist-entry[data-date="${isoDate}"]`);
+        if (!target) return;
+        container.querySelectorAll('.hcal-day.hcal-selected').forEach(el => el.classList.remove('hcal-selected'));
+        container.querySelectorAll('.hist-entry.hist-focus').forEach(el => el.classList.remove('hist-focus'));
+        const dayCell = container.querySelector(`.hcal-day[data-date="${isoDate}"]`);
+        if (dayCell) dayCell.classList.add('hcal-selected');
+        target.classList.add('hist-focus');
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.setTimeout(() => target.classList.remove('hist-focus'), 1800);
+      };
+
+      container.querySelectorAll('.hcal-day[data-date]').forEach(dayEl => {
+        dayEl.addEventListener('click', () => focusDateInList(dayEl.dataset.date));
+      });
     }
 
     // ── Startup ───────────────────────────────────────────────────────────────
