@@ -10,9 +10,411 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_PUSHOVER_ENABLED, CONF_PUSHOVER_USER_KEY, DOMAIN
+from .const import (
+    CONF_CYCLES,
+    CONF_DAILY_REPORT_ENABLED,
+    CONF_DAILY_REPORT_HOUR,
+    CONF_HIGH_THRESHOLD,
+    CONF_LANGUAGE,
+    CONF_LOW_THRESHOLD,
+    CONF_OWM_API_KEY,
+    CONF_PUSHOVER_API_TOKEN,
+    CONF_PUSHOVER_DEVICE,
+    CONF_PUSHOVER_ENABLED,
+    CONF_PUSHOVER_PRIORITY,
+    CONF_PUSHOVER_USER_KEY,
+    CONF_RECHECK_TIME,
+    CONF_SOLAR_RADIATION,
+    CONF_SUNRISE_OFFSET,
+    CONF_USE_OWM,
+    CONF_WEATHER_ENTITY,
+    CONF_ZONE_ADAPTIVE,
+    CONF_ZONE_AREA,
+    CONF_ZONE_CROP_COEF,
+    CONF_ZONE_EFFICIENCY,
+    CONF_ZONE_EMITTER_COUNT,
+    CONF_ZONE_ENABLED,
+    CONF_ZONE_EXPOSURE_FACTOR,
+    CONF_ZONE_FLOW_RATE,
+    CONF_ZONE_MAX_DURATION,
+    CONF_ZONE_MONTHS,
+    CONF_ZONE_NAME,
+    CONF_ZONE_PLANT_DENSITY,
+    CONF_ZONE_RAIN_FACTORING,
+    CONF_ZONE_RAIN_THRESHOLD,
+    CONF_ZONE_SWITCH_ENTITY,
+    CONF_ZONE_WEEKDAYS,
+    CONF_ZONES,
+    DEFAULT_CYCLES,
+    DEFAULT_DAILY_REPORT_ENABLED,
+    DEFAULT_DAILY_REPORT_HOUR,
+    DEFAULT_HIGH_THRESHOLD,
+    DEFAULT_LANGUAGE,
+    DEFAULT_LOW_THRESHOLD,
+    DEFAULT_PUSHOVER_ENABLED,
+    DEFAULT_PUSHOVER_PRIORITY,
+    DEFAULT_RECHECK_TIME,
+    DEFAULT_SOLAR_RADIATION,
+    DEFAULT_SUNRISE_OFFSET,
+    DEFAULT_ZONE_ADAPTIVE,
+    DEFAULT_ZONE_AREA,
+    DEFAULT_ZONE_CROP_COEF,
+    DEFAULT_ZONE_EFFICIENCY,
+    DEFAULT_ZONE_EMITTER_COUNT,
+    DEFAULT_ZONE_ENABLED,
+    DEFAULT_ZONE_EXPOSURE_FACTOR,
+    DEFAULT_ZONE_FLOW_RATE,
+    DEFAULT_ZONE_MAX_DURATION,
+    DEFAULT_ZONE_PLANT_DENSITY,
+    DEFAULT_ZONE_RAIN_FACTORING,
+    DEFAULT_ZONE_RAIN_THRESHOLD,
+    DOMAIN,
+    WEEKDAYS,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+BACKUP_FORMAT = "irrigationpro-backup-v1"
+
+_LEGACY_MONTH_MAP = {
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
+}
+
+_LEGACY_WEEKDAY_MAP = {
+    "monday": "monday",
+    "tuesday": "tuesday",
+    "wednesday": "wednesday",
+    "thursday": "thursday",
+    "friday": "friday",
+    "saturday": "saturday",
+    "sunday": "sunday",
+}
+
+
+def _resolve_coordinator(hass: HomeAssistant, entry_id: str | None = None):
+    """Return coordinator by optional entry_id, otherwise first coordinator."""
+    coordinators = hass.data.get(DOMAIN, {})
+    if not coordinators:
+        return None
+    if entry_id and entry_id in coordinators:
+        return coordinators[entry_id]
+    return next(iter(coordinators.values()))
+
+
+def _sanitize_entry_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Keep only integration config keys needed for backup/restore."""
+    allowed = {
+        CONF_WEATHER_ENTITY,
+        CONF_USE_OWM,
+        CONF_OWM_API_KEY,
+        CONF_ZONES,
+        CONF_SUNRISE_OFFSET,
+        CONF_CYCLES,
+        CONF_LOW_THRESHOLD,
+        CONF_HIGH_THRESHOLD,
+        CONF_RECHECK_TIME,
+        CONF_LANGUAGE,
+        CONF_PUSHOVER_ENABLED,
+        CONF_PUSHOVER_API_TOKEN,
+        CONF_PUSHOVER_USER_KEY,
+        CONF_PUSHOVER_DEVICE,
+        CONF_PUSHOVER_PRIORITY,
+        CONF_DAILY_REPORT_ENABLED,
+        CONF_DAILY_REPORT_HOUR,
+        CONF_SOLAR_RADIATION,
+    }
+    return {k: v for k, v in data.items() if k in allowed}
+
+
+def _normalize_months(value: Any) -> list[int]:
+    """Normalize month values to integer month list [1..12]."""
+    months: list[int] = []
+    for item in value or []:
+        if isinstance(item, int) and 1 <= item <= 12:
+            months.append(item)
+            continue
+        if isinstance(item, str):
+            key = item.strip().lower()[:3]
+            mapped = _LEGACY_MONTH_MAP.get(key)
+            if mapped:
+                months.append(mapped)
+    return sorted(set(months)) or list(range(1, 13))
+
+
+def _normalize_weekdays(value: Any) -> list[str]:
+    """Normalize weekdays to integration weekday tokens."""
+    days: list[str] = []
+    for item in value or []:
+        if isinstance(item, str):
+            day = _LEGACY_WEEKDAY_MAP.get(item.strip().lower())
+            if day:
+                days.append(day)
+    return sorted(set(days), key=WEEKDAYS.index) if days else WEEKDAYS.copy()
+
+
+def _build_backup_payload(coordinator) -> dict[str, Any]:
+    """Build canonical export payload."""
+    return {
+        "backup_format": BACKUP_FORMAT,
+        "created_at": dt_util.now().isoformat(),
+        "domain": DOMAIN,
+        "data": _sanitize_entry_data(dict(coordinator.entry.data)),
+    }
+
+
+def _convert_legacy_payload(raw: dict[str, Any], existing_data: dict[str, Any]) -> dict[str, Any]:
+    """Convert legacy SmartSprinklers-like setup payload into IrrigationPro config data."""
+    zones_raw = raw.get("zones") or []
+    existing_zones = existing_data.get(CONF_ZONES, [])
+
+    converted_zones: list[dict[str, Any]] = []
+    for idx, legacy_zone in enumerate(zones_raw):
+        existing_zone = existing_zones[idx] if idx < len(existing_zones) else {}
+        drip_nos = int(legacy_zone.get("dripNos", 1) or 1)
+        total_lph = float(legacy_zone.get("dripLPH", 0.0) or 0.0)
+        flow_per_emitter = total_lph / drip_nos if drip_nos > 0 and total_lph > 0 else float(existing_zone.get(CONF_ZONE_FLOW_RATE, 2.0))
+
+        converted_zones.append(
+            {
+                CONF_ZONE_NAME: legacy_zone.get("zoneName", existing_zone.get(CONF_ZONE_NAME, f"Zone {idx + 1}")),
+                CONF_ZONE_ENABLED: bool(legacy_zone.get("enabled", existing_zone.get(CONF_ZONE_ENABLED, True))),
+                CONF_ZONE_ADAPTIVE: bool(legacy_zone.get("adaptive", existing_zone.get(CONF_ZONE_ADAPTIVE, True))),
+                CONF_ZONE_RAIN_FACTORING: bool(legacy_zone.get("rainFactoring", existing_zone.get(CONF_ZONE_RAIN_FACTORING, True))),
+                CONF_ZONE_MAX_DURATION: int(legacy_zone.get("maxDuration", existing_zone.get(CONF_ZONE_MAX_DURATION, 60))),
+                CONF_ZONE_RAIN_THRESHOLD: float(legacy_zone.get("rainThreshold", existing_zone.get(CONF_ZONE_RAIN_THRESHOLD, 2.5))),
+                CONF_ZONE_AREA: float(legacy_zone.get("dripArea", existing_zone.get(CONF_ZONE_AREA, 10.0))),
+                CONF_ZONE_FLOW_RATE: float(flow_per_emitter),
+                CONF_ZONE_EMITTER_COUNT: int(drip_nos),
+                CONF_ZONE_EFFICIENCY: int(legacy_zone.get("efficiency", existing_zone.get(CONF_ZONE_EFFICIENCY, 90))),
+                CONF_ZONE_CROP_COEF: float(legacy_zone.get("cropCoef", existing_zone.get(CONF_ZONE_CROP_COEF, 0.6))),
+                CONF_ZONE_PLANT_DENSITY: float(legacy_zone.get("plantDensity", existing_zone.get(CONF_ZONE_PLANT_DENSITY, 1.0))),
+                CONF_ZONE_EXPOSURE_FACTOR: float(legacy_zone.get("expFactor", existing_zone.get(CONF_ZONE_EXPOSURE_FACTOR, 1.0))),
+                CONF_ZONE_WEEKDAYS: _normalize_weekdays(legacy_zone.get("wateringWeekdays")),
+                CONF_ZONE_MONTHS: _normalize_months(legacy_zone.get("wateringMonths")),
+                CONF_ZONE_SWITCH_ENTITY: legacy_zone.get("switch_entity") or existing_zone.get(CONF_ZONE_SWITCH_ENTITY),
+            }
+        )
+
+    solar = {
+        1: float(raw.get("JanRad", DEFAULT_SOLAR_RADIATION[1])),
+        2: float(raw.get("FebRad", DEFAULT_SOLAR_RADIATION[2])),
+        3: float(raw.get("MarRad", DEFAULT_SOLAR_RADIATION[3])),
+        4: float(raw.get("AprRad", DEFAULT_SOLAR_RADIATION[4])),
+        5: float(raw.get("MayRad", DEFAULT_SOLAR_RADIATION[5])),
+        6: float(raw.get("JunRad", DEFAULT_SOLAR_RADIATION[6])),
+        7: float(raw.get("JulRad", DEFAULT_SOLAR_RADIATION[7])),
+        8: float(raw.get("AugRad", DEFAULT_SOLAR_RADIATION[8])),
+        9: float(raw.get("SepRad", DEFAULT_SOLAR_RADIATION[9])),
+        10: float(raw.get("OctRad", DEFAULT_SOLAR_RADIATION[10])),
+        11: float(raw.get("NovRad", DEFAULT_SOLAR_RADIATION[11])),
+        12: float(raw.get("DecRad", DEFAULT_SOLAR_RADIATION[12])),
+    }
+
+    return {
+        CONF_WEATHER_ENTITY: existing_data.get(CONF_WEATHER_ENTITY),
+        CONF_USE_OWM: bool(existing_data.get(CONF_USE_OWM, False)),
+        CONF_OWM_API_KEY: existing_data.get(CONF_OWM_API_KEY),
+        CONF_ZONES: converted_zones,
+        CONF_SUNRISE_OFFSET: int(raw.get("sunriseOffset", DEFAULT_SUNRISE_OFFSET)),
+        CONF_CYCLES: int(raw.get("cycles", DEFAULT_CYCLES)),
+        CONF_LOW_THRESHOLD: int(raw.get("lowThreshold", DEFAULT_LOW_THRESHOLD)),
+        CONF_HIGH_THRESHOLD: int(raw.get("highThreshold", DEFAULT_HIGH_THRESHOLD)),
+        CONF_RECHECK_TIME: int(raw.get("recheckTime", DEFAULT_RECHECK_TIME)),
+        CONF_LANGUAGE: existing_data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+        CONF_PUSHOVER_ENABLED: bool(raw.get("pushEnable", DEFAULT_PUSHOVER_ENABLED)),
+        CONF_PUSHOVER_API_TOKEN: raw.get("tokenPO", ""),
+        CONF_PUSHOVER_USER_KEY: raw.get("userPO", ""),
+        CONF_PUSHOVER_DEVICE: existing_data.get(CONF_PUSHOVER_DEVICE, ""),
+        CONF_PUSHOVER_PRIORITY: int(raw.get("priorityPO", DEFAULT_PUSHOVER_PRIORITY)),
+        CONF_DAILY_REPORT_ENABLED: bool(existing_data.get(CONF_DAILY_REPORT_ENABLED, DEFAULT_DAILY_REPORT_ENABLED)),
+        CONF_DAILY_REPORT_HOUR: int(existing_data.get(CONF_DAILY_REPORT_HOUR, DEFAULT_DAILY_REPORT_HOUR)),
+        CONF_SOLAR_RADIATION: solar,
+    }
+
+
+def _normalize_restore_payload(payload: dict[str, Any], existing_data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize accepted restore payload formats to entry.data-like dict."""
+    if payload.get("backup_format") == BACKUP_FORMAT and isinstance(payload.get("data"), dict):
+        return payload["data"]
+
+    if isinstance(payload.get("backup"), dict):
+        nested = payload["backup"]
+        if nested.get("backup_format") == BACKUP_FORMAT and isinstance(nested.get("data"), dict):
+            return nested["data"]
+
+    if isinstance(payload.get("zones"), list) and payload.get("accessory"):
+        return _convert_legacy_payload(payload, existing_data)
+
+    raise ValueError("Unsupported backup payload")
+
+
+def _to_bool(value: Any, default: bool = False) -> bool:
+    """Coerce arbitrary value to bool."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "y"}
+    return bool(value) if value is not None else default
+
+
+def _to_int(value: Any, default: int) -> int:
+    """Coerce arbitrary value to int with fallback."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_float(value: Any, default: float) -> float:
+    """Coerce arbitrary value to float with fallback."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_solar_radiation(value: Any) -> dict[int, float]:
+    """Normalize solar radiation config to month->float map with int keys."""
+    raw = value if isinstance(value, dict) else {}
+    normalized: dict[int, float] = {}
+    for month in range(1, 13):
+        month_val = raw.get(month)
+        if month_val is None:
+            month_val = raw.get(str(month))
+        normalized[month] = _to_float(month_val, float(DEFAULT_SOLAR_RADIATION[month]))
+    return normalized
+
+
+def _normalize_zone(zone: dict[str, Any], index: int, existing_zone: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a zone payload into canonical zone config values."""
+    defaults = {
+        CONF_ZONE_NAME: f"Zone {index}",
+        CONF_ZONE_ENABLED: DEFAULT_ZONE_ENABLED,
+        CONF_ZONE_ADAPTIVE: DEFAULT_ZONE_ADAPTIVE,
+        CONF_ZONE_RAIN_FACTORING: DEFAULT_ZONE_RAIN_FACTORING,
+        CONF_ZONE_MAX_DURATION: DEFAULT_ZONE_MAX_DURATION,
+        CONF_ZONE_RAIN_THRESHOLD: DEFAULT_ZONE_RAIN_THRESHOLD,
+        CONF_ZONE_AREA: DEFAULT_ZONE_AREA,
+        CONF_ZONE_FLOW_RATE: DEFAULT_ZONE_FLOW_RATE,
+        CONF_ZONE_EMITTER_COUNT: DEFAULT_ZONE_EMITTER_COUNT,
+        CONF_ZONE_EFFICIENCY: DEFAULT_ZONE_EFFICIENCY,
+        CONF_ZONE_CROP_COEF: DEFAULT_ZONE_CROP_COEF,
+        CONF_ZONE_PLANT_DENSITY: DEFAULT_ZONE_PLANT_DENSITY,
+        CONF_ZONE_EXPOSURE_FACTOR: DEFAULT_ZONE_EXPOSURE_FACTOR,
+        CONF_ZONE_WEEKDAYS: WEEKDAYS,
+        CONF_ZONE_MONTHS: list(range(1, 13)),
+        CONF_ZONE_SWITCH_ENTITY: "",
+    }
+    src = {**defaults, **existing_zone, **(zone or {})}
+    return {
+        CONF_ZONE_NAME: str(src.get(CONF_ZONE_NAME, defaults[CONF_ZONE_NAME])).strip() or defaults[CONF_ZONE_NAME],
+        CONF_ZONE_ENABLED: _to_bool(src.get(CONF_ZONE_ENABLED), DEFAULT_ZONE_ENABLED),
+        CONF_ZONE_ADAPTIVE: _to_bool(src.get(CONF_ZONE_ADAPTIVE), DEFAULT_ZONE_ADAPTIVE),
+        CONF_ZONE_RAIN_FACTORING: _to_bool(src.get(CONF_ZONE_RAIN_FACTORING), DEFAULT_ZONE_RAIN_FACTORING),
+        CONF_ZONE_MAX_DURATION: _to_int(src.get(CONF_ZONE_MAX_DURATION), DEFAULT_ZONE_MAX_DURATION),
+        CONF_ZONE_RAIN_THRESHOLD: _to_float(src.get(CONF_ZONE_RAIN_THRESHOLD), DEFAULT_ZONE_RAIN_THRESHOLD),
+        CONF_ZONE_AREA: _to_float(src.get(CONF_ZONE_AREA), DEFAULT_ZONE_AREA),
+        CONF_ZONE_FLOW_RATE: _to_float(src.get(CONF_ZONE_FLOW_RATE), DEFAULT_ZONE_FLOW_RATE),
+        CONF_ZONE_EMITTER_COUNT: max(1, _to_int(src.get(CONF_ZONE_EMITTER_COUNT), DEFAULT_ZONE_EMITTER_COUNT)),
+        CONF_ZONE_EFFICIENCY: _to_int(src.get(CONF_ZONE_EFFICIENCY), DEFAULT_ZONE_EFFICIENCY),
+        CONF_ZONE_CROP_COEF: _to_float(src.get(CONF_ZONE_CROP_COEF), DEFAULT_ZONE_CROP_COEF),
+        CONF_ZONE_PLANT_DENSITY: _to_float(src.get(CONF_ZONE_PLANT_DENSITY), DEFAULT_ZONE_PLANT_DENSITY),
+        CONF_ZONE_EXPOSURE_FACTOR: _to_float(src.get(CONF_ZONE_EXPOSURE_FACTOR), DEFAULT_ZONE_EXPOSURE_FACTOR),
+        CONF_ZONE_WEEKDAYS: _normalize_weekdays(src.get(CONF_ZONE_WEEKDAYS)),
+        CONF_ZONE_MONTHS: _normalize_months(src.get(CONF_ZONE_MONTHS)),
+        CONF_ZONE_SWITCH_ENTITY: str(src.get(CONF_ZONE_SWITCH_ENTITY) or "").strip() or None,
+    }
+
+
+def _normalize_config_data(data: dict[str, Any], existing_data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a full integration config data payload."""
+    zones_raw = data.get(CONF_ZONES)
+    if not isinstance(zones_raw, list):
+        zones_raw = existing_data.get(CONF_ZONES, [])
+
+    existing_zones = existing_data.get(CONF_ZONES, [])
+    zones = []
+    for idx, zone_raw in enumerate(zones_raw, start=1):
+        existing_zone = existing_zones[idx - 1] if idx - 1 < len(existing_zones) else {}
+        zones.append(_normalize_zone(zone_raw if isinstance(zone_raw, dict) else {}, idx, existing_zone))
+
+    out = {
+        CONF_WEATHER_ENTITY: str(data.get(CONF_WEATHER_ENTITY, existing_data.get(CONF_WEATHER_ENTITY, ""))).strip(),
+        CONF_USE_OWM: _to_bool(data.get(CONF_USE_OWM, existing_data.get(CONF_USE_OWM, False)), False),
+        CONF_OWM_API_KEY: str(data.get(CONF_OWM_API_KEY, existing_data.get(CONF_OWM_API_KEY, "")) or "").strip(),
+        CONF_ZONES: zones,
+        CONF_SUNRISE_OFFSET: _to_int(data.get(CONF_SUNRISE_OFFSET, existing_data.get(CONF_SUNRISE_OFFSET, DEFAULT_SUNRISE_OFFSET)), DEFAULT_SUNRISE_OFFSET),
+        CONF_CYCLES: _to_int(data.get(CONF_CYCLES, existing_data.get(CONF_CYCLES, DEFAULT_CYCLES)), DEFAULT_CYCLES),
+        CONF_LOW_THRESHOLD: _to_int(data.get(CONF_LOW_THRESHOLD, existing_data.get(CONF_LOW_THRESHOLD, DEFAULT_LOW_THRESHOLD)), DEFAULT_LOW_THRESHOLD),
+        CONF_HIGH_THRESHOLD: _to_int(data.get(CONF_HIGH_THRESHOLD, existing_data.get(CONF_HIGH_THRESHOLD, DEFAULT_HIGH_THRESHOLD)), DEFAULT_HIGH_THRESHOLD),
+        CONF_RECHECK_TIME: _to_int(data.get(CONF_RECHECK_TIME, existing_data.get(CONF_RECHECK_TIME, DEFAULT_RECHECK_TIME)), DEFAULT_RECHECK_TIME),
+        CONF_LANGUAGE: str(data.get(CONF_LANGUAGE, existing_data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)) or DEFAULT_LANGUAGE),
+        CONF_PUSHOVER_ENABLED: _to_bool(data.get(CONF_PUSHOVER_ENABLED, existing_data.get(CONF_PUSHOVER_ENABLED, DEFAULT_PUSHOVER_ENABLED)), DEFAULT_PUSHOVER_ENABLED),
+        CONF_PUSHOVER_API_TOKEN: str(data.get(CONF_PUSHOVER_API_TOKEN, existing_data.get(CONF_PUSHOVER_API_TOKEN, "")) or "").strip(),
+        CONF_PUSHOVER_USER_KEY: str(data.get(CONF_PUSHOVER_USER_KEY, existing_data.get(CONF_PUSHOVER_USER_KEY, "")) or "").strip(),
+        CONF_PUSHOVER_DEVICE: str(data.get(CONF_PUSHOVER_DEVICE, existing_data.get(CONF_PUSHOVER_DEVICE, "")) or "").strip(),
+        CONF_PUSHOVER_PRIORITY: _to_int(data.get(CONF_PUSHOVER_PRIORITY, existing_data.get(CONF_PUSHOVER_PRIORITY, DEFAULT_PUSHOVER_PRIORITY)), DEFAULT_PUSHOVER_PRIORITY),
+        CONF_DAILY_REPORT_ENABLED: _to_bool(data.get(CONF_DAILY_REPORT_ENABLED, existing_data.get(CONF_DAILY_REPORT_ENABLED, DEFAULT_DAILY_REPORT_ENABLED)), DEFAULT_DAILY_REPORT_ENABLED),
+        CONF_DAILY_REPORT_HOUR: _to_int(data.get(CONF_DAILY_REPORT_HOUR, existing_data.get(CONF_DAILY_REPORT_HOUR, DEFAULT_DAILY_REPORT_HOUR)), DEFAULT_DAILY_REPORT_HOUR),
+        CONF_SOLAR_RADIATION: _normalize_solar_radiation(data.get(CONF_SOLAR_RADIATION, existing_data.get(CONF_SOLAR_RADIATION, DEFAULT_SOLAR_RADIATION))),
+    }
+    if out[CONF_LANGUAGE] not in ("de", "en"):
+        out[CONF_LANGUAGE] = DEFAULT_LANGUAGE
+    return out
+
+
+def _validate_candidate(hass: HomeAssistant, candidate: dict[str, Any]) -> dict[str, list[str]]:
+    """Validate candidate config and return errors/warnings."""
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    weather_entity = candidate.get(CONF_WEATHER_ENTITY)
+    if not weather_entity:
+        errors.append("weather_entity is required")
+    elif hass.states.get(weather_entity) is None:
+        warnings.append(f"weather_entity not found: {weather_entity}")
+
+    zones = candidate.get(CONF_ZONES, [])
+    if not isinstance(zones, list) or not zones:
+        errors.append("zones missing or empty")
+    else:
+        for idx, zone in enumerate(zones, start=1):
+            if not zone.get(CONF_ZONE_NAME):
+                errors.append(f"zone {idx}: zone_name is required")
+            if not zone.get(CONF_ZONE_WEEKDAYS):
+                errors.append(f"zone {idx}: zone_weekdays must not be empty")
+            if not zone.get(CONF_ZONE_MONTHS):
+                errors.append(f"zone {idx}: zone_months must not be empty")
+            switch_entity = zone.get(CONF_ZONE_SWITCH_ENTITY)
+            if not switch_entity:
+                warnings.append(f"zone {idx}: switch_entity is empty")
+            elif hass.states.get(switch_entity) is None:
+                warnings.append(f"zone {idx}: switch_entity not found: {switch_entity}")
+
+    return {"errors": errors, "warnings": warnings}
+
+
+def _available_entities(hass: HomeAssistant) -> dict[str, list[str]]:
+    """Return weather and switch-like entities for backup editor suggestions."""
+    weather_entities = sorted(list(hass.states.async_entity_ids("weather")))
+    switch_like = set(hass.states.async_entity_ids("switch"))
+    switch_like.update(hass.states.async_entity_ids("light"))
+    switch_like.update(hass.states.async_entity_ids("valve"))
+    return {
+        "weather_entities": weather_entities,
+        "switch_entities": sorted(list(switch_like)),
+    }
 
 
 class IrrigationProApiView(HomeAssistantView):
@@ -63,8 +465,8 @@ class IrrigationProApiView(HomeAssistantView):
                         "adaptive": zone.adaptive,
                         "skip_reason": getattr(zone, "skip_reason", ""),
                         "run_until": (
-                            (getattr(zone, "started_at", None) + timedelta(minutes=zone.duration)).isoformat()
-                            if getattr(zone, "started_at", None) and zone.duration > 0
+                            (zone.started_at + timedelta(minutes=zone.duration)).isoformat()
+                            if zone.started_at and zone.duration > 0
                             else None
                         ),
                         "last_run": (
@@ -74,6 +476,7 @@ class IrrigationProApiView(HomeAssistantView):
                             zone.next_run.isoformat() if zone.next_run else None
                         ),
                         "weekdays": zone.weekdays,
+                        "months": zone.months,
                     }
                 )
 
@@ -111,9 +514,30 @@ class IrrigationProApiView(HomeAssistantView):
                 if last_update and getattr(coordinator, "update_interval", None)
                 else None
             )
+            month_now = dt_util.now().month
+            solar_cfg = coordinator.entry.data.get(CONF_SOLAR_RADIATION, DEFAULT_SOLAR_RADIATION)
+            solar_month_val = solar_cfg.get(month_now)
+            if solar_month_val is None:
+                solar_month_val = solar_cfg.get(str(month_now))
+            if solar_month_val is None:
+                solar_month_val = DEFAULT_SOLAR_RADIATION.get(month_now)
+
+            # Build full 12-month solar radiation dict for the editor
+            solar_all = {}
+            for m in range(1, 13):
+                v = solar_cfg.get(m)
+                if v is None:
+                    v = solar_cfg.get(str(m))
+                if v is None:
+                    v = DEFAULT_SOLAR_RADIATION.get(m, 6.0)
+                solar_all[str(m)] = round(float(v), 2)
 
             entry_data = {
                 "entry_id": entry_id,
+                "language": coordinator.entry.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+                "current_month": month_now,
+                "current_month_solar_radiation": round(float(solar_month_val), 2) if solar_month_val is not None else None,
+                "solar_radiation": solar_all,
                 "zones": zones_data,
                 "forecast": forecast_data,
                 "scheduled_run": (
@@ -310,8 +734,8 @@ class IrrigationProTestNotificationView(HomeAssistantView):
 
         try:
             await coordinator._send_pushover_notification(
-                "\U0001f514 IrrigationPro Test",
-                f"Test-Benachrichtigung erfolgreich! Priorit\u00e4t: {priority}",
+                coordinator._txt("title_test"),
+                coordinator._txt("test_message", priority=priority),
                 priority=priority,
                 force=True,
                 test_mode=True,
@@ -325,6 +749,330 @@ class IrrigationProTestNotificationView(HomeAssistantView):
             )
 
 
+class IrrigationProSettingsLanguageView(HomeAssistantView):
+    """API view to persist language settings from the frontend."""
+
+    url = "/api/irrigationpro/settings/language"
+    name = "api:irrigationpro:settings_language"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Persist frontend language selection in the config entry."""
+        hass: HomeAssistant = request.app["hass"]
+        data = await request.json()
+        language = data.get("language", DEFAULT_LANGUAGE)
+        entry_id = data.get("entry_id")
+
+        if language not in ("de", "en"):
+            return self.json({"error": "invalid language"}, status_code=400)
+
+        coordinators = hass.data.get(DOMAIN, {})
+        if not coordinators:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        coordinator = None
+        if entry_id:
+            coordinator = coordinators.get(entry_id)
+        if coordinator is None:
+            coordinator = next(iter(coordinators.values()))
+
+        hass.config_entries.async_update_entry(
+            coordinator.entry,
+            data={**coordinator.entry.data, CONF_LANGUAGE: language},
+        )
+        return self.json({"status": "ok", "language": language})
+
+
+class IrrigationProSettingsSolarView(HomeAssistantView):
+    """API view to update monthly solar radiation values."""
+
+    url = "/api/irrigationpro/settings/solar"
+    name = "api:irrigationpro:settings_solar"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Persist solar radiation values in the config entry."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            data = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        entry_id = data.get("entry_id") if isinstance(data, dict) else None
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        solar_values = data.get("solar_radiation") if isinstance(data, dict) else None
+        if not isinstance(solar_values, dict):
+            return self.json({"error": "solar_radiation dict required"}, status_code=400)
+
+        # Normalize: accept string or int keys, build int-keyed dict
+        normalized: dict[int, float] = {}
+        for m in range(1, 13):
+            raw = solar_values.get(str(m)) or solar_values.get(m)
+            if raw is not None:
+                try:
+                    normalized[m] = round(float(raw), 2)
+                except (TypeError, ValueError):
+                    pass
+            if m not in normalized:
+                old_cfg = coordinator.entry.data.get(CONF_SOLAR_RADIATION, DEFAULT_SOLAR_RADIATION)
+                fallback = old_cfg.get(m) or old_cfg.get(str(m)) or DEFAULT_SOLAR_RADIATION.get(m, 6.0)
+                normalized[m] = round(float(fallback), 2)
+
+        hass.config_entries.async_update_entry(
+            coordinator.entry,
+            data={**coordinator.entry.data, CONF_SOLAR_RADIATION: normalized},
+        )
+        return self.json({"status": "ok", "solar_radiation": {str(k): v for k, v in normalized.items()}})
+
+
+class IrrigationProBackupExportView(HomeAssistantView):
+    """API view to export current integration configuration as backup."""
+
+    url = "/api/irrigationpro/backup/export"
+    name = "api:irrigationpro:backup_export"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Export config of the selected (or first) entry."""
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id")
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        return self.json(_build_backup_payload(coordinator))
+
+
+class IrrigationProBackupRestoreView(HomeAssistantView):
+    """API view to restore integration configuration from backup."""
+
+    url = "/api/irrigationpro/backup/restore"
+    name = "api:irrigationpro:backup_restore"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Restore config from native backup format or legacy setup format."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            payload = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        entry_id = payload.get("entry_id") if isinstance(payload, dict) else None
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        try:
+            normalized = _normalize_restore_payload(payload, coordinator.entry.data)
+        except ValueError as err:
+            return self.json({"error": str(err)}, status_code=400)
+
+        merged = {**coordinator.entry.data, **_sanitize_entry_data(normalized)}
+
+        if not merged.get(CONF_WEATHER_ENTITY):
+            return self.json(
+                {"error": "weather_entity missing (legacy import needs existing configured weather entity)"},
+                status_code=400,
+            )
+        if not isinstance(merged.get(CONF_ZONES), list) or not merged.get(CONF_ZONES):
+            return self.json({"error": "zones missing or empty"}, status_code=400)
+
+        hass.config_entries.async_update_entry(coordinator.entry, data=merged)
+        return self.json(
+            {
+                "status": "ok",
+                "restored": True,
+                "zones": len(merged.get(CONF_ZONES, [])),
+                "backup_format": BACKUP_FORMAT,
+            }
+        )
+
+
+class IrrigationProBackupPrepareView(HomeAssistantView):
+    """API view to parse/normalize backup payload before applying changes."""
+
+    url = "/api/irrigationpro/backup/prepare"
+    name = "api:irrigationpro:backup_prepare"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Prepare editable draft config from backup payload."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            payload = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        entry_id = payload.get("entry_id") if isinstance(payload, dict) else None
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        raw_backup = payload.get("backup") if isinstance(payload, dict) and isinstance(payload.get("backup"), dict) else payload
+        if not isinstance(raw_backup, dict):
+            return self.json({"error": "backup payload must be an object"}, status_code=400)
+        try:
+            normalized = _normalize_restore_payload(raw_backup, coordinator.entry.data)
+        except ValueError as err:
+            return self.json({"error": str(err)}, status_code=400)
+
+        merged = {**coordinator.entry.data, **_sanitize_entry_data(normalized)}
+        candidate = _normalize_config_data(merged, coordinator.entry.data)
+        issues = _validate_candidate(hass, candidate)
+        entities = _available_entities(hass)
+
+        return self.json(
+            {
+                "status": "ok",
+                "entry_id": coordinator.entry.entry_id,
+                "draft": candidate,
+                "issues": issues,
+                "backup_format": BACKUP_FORMAT,
+                **entities,
+            }
+        )
+
+
+class IrrigationProBackupApplyView(HomeAssistantView):
+    """API view to apply previously reviewed backup draft data."""
+
+    url = "/api/irrigationpro/backup/apply"
+    name = "api:irrigationpro:backup_apply"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Apply edited draft config to config entry."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            payload = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        entry_id = payload.get("entry_id") if isinstance(payload, dict) else None
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        data = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else None
+        if data is None:
+            return self.json({"error": "data object required"}, status_code=400)
+
+        candidate = _normalize_config_data(data, coordinator.entry.data)
+        issues = _validate_candidate(hass, candidate)
+        if issues["errors"]:
+            return self.json({"error": "validation failed", "issues": issues}, status_code=400)
+
+        hass.config_entries.async_update_entry(coordinator.entry, data=candidate)
+        return self.json(
+            {
+                "status": "ok",
+                "saved": True,
+                "zones": len(candidate.get(CONF_ZONES, [])),
+                "issues": issues,
+            }
+        )
+
+
+class IrrigationProZoneScheduleView(HomeAssistantView):
+    """API view to get/update weekdays and months per zone."""
+
+    url = "/api/irrigationpro/zones/schedule"
+    name = "api:irrigationpro:zones_schedule"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return current zone schedule constraints and valid values."""
+        hass: HomeAssistant = request.app["hass"]
+        coordinator = _resolve_coordinator(hass, request.query.get("entry_id"))
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        zones = []
+        for idx, zone in enumerate(coordinator.entry.data.get(CONF_ZONES, []), start=1):
+            zones.append(
+                {
+                    "zone_id": idx,
+                    "zone_name": zone.get(CONF_ZONE_NAME),
+                    "zone_weekdays": zone.get(CONF_ZONE_WEEKDAYS, WEEKDAYS),
+                    "zone_months": zone.get(CONF_ZONE_MONTHS, list(range(1, 13))),
+                }
+            )
+
+        return self.json(
+            {
+                "status": "ok",
+                "entry_id": coordinator.entry.entry_id,
+                "valid_weekdays": WEEKDAYS,
+                "valid_months": list(range(1, 13)),
+                "zones": zones,
+            }
+        )
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Update schedule constraints for one or multiple zones."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            data = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        coordinator = _resolve_coordinator(hass, data.get("entry_id"))
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        zones_cfg = [dict(z) for z in coordinator.entry.data.get(CONF_ZONES, [])]
+        if not zones_cfg:
+            return self.json({"error": "No zones configured"}, status_code=400)
+
+        updates: list[dict[str, Any]] = []
+        if isinstance(data.get("zones"), list):
+            updates = [u for u in data.get("zones", []) if isinstance(u, dict)]
+        elif "zone_id" in data:
+            updates = [data]
+
+        if not updates:
+            return self.json({"error": "zone_id or zones[] required"}, status_code=400)
+
+        updated_zone_ids: list[int] = []
+        for upd in updates:
+            zone_id = upd.get("zone_id")
+            if not isinstance(zone_id, int) or zone_id < 1 or zone_id > len(zones_cfg):
+                return self.json({"error": f"invalid zone_id: {zone_id}"}, status_code=400)
+
+            zone = zones_cfg[zone_id - 1]
+
+            if CONF_ZONE_WEEKDAYS in upd:
+                weekdays = [str(v).lower() for v in upd.get(CONF_ZONE_WEEKDAYS, [])]
+                weekdays = [d for d in weekdays if d in WEEKDAYS]
+                if not weekdays:
+                    return self.json({"error": f"zone {zone_id}: zone_weekdays must not be empty"}, status_code=400)
+                zone[CONF_ZONE_WEEKDAYS] = sorted(set(weekdays), key=WEEKDAYS.index)
+
+            if CONF_ZONE_MONTHS in upd:
+                months_in = upd.get(CONF_ZONE_MONTHS, [])
+                months = []
+                for m in months_in:
+                    try:
+                        m_int = int(m)
+                    except (TypeError, ValueError):
+                        continue
+                    if 1 <= m_int <= 12:
+                        months.append(m_int)
+                if not months:
+                    return self.json({"error": f"zone {zone_id}: zone_months must not be empty"}, status_code=400)
+                zone[CONF_ZONE_MONTHS] = sorted(set(months))
+
+            updated_zone_ids.append(zone_id)
+
+        merged = {**coordinator.entry.data, CONF_ZONES: zones_cfg}
+        hass.config_entries.async_update_entry(coordinator.entry, data=merged)
+        return self.json({"status": "ok", "updated_zones": sorted(set(updated_zone_ids))})
+
+
 def async_register_api(hass: HomeAssistant) -> None:
     """Register API views."""
     hass.http.register_view(IrrigationProApiView)
@@ -332,4 +1080,11 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(IrrigationProRecalculateView)
     hass.http.register_view(IrrigationProTestView)
     hass.http.register_view(IrrigationProTestNotificationView)
+    hass.http.register_view(IrrigationProSettingsLanguageView)
+    hass.http.register_view(IrrigationProSettingsSolarView)
+    hass.http.register_view(IrrigationProBackupExportView)
+    hass.http.register_view(IrrigationProBackupRestoreView)
+    hass.http.register_view(IrrigationProBackupPrepareView)
+    hass.http.register_view(IrrigationProBackupApplyView)
+    hass.http.register_view(IrrigationProZoneScheduleView)
     hass.http.register_view(IrrigationProHistoryView)

@@ -36,3 +36,12 @@ dmypy.json
 venv/
 ENV/
 env/
+
+# Sensitive local files – never commit secrets
+setup irrigation
+setup*irrigation*
+
+# Backups contain real credentials – keep local only
+backups/
+*.backup.json
+*.bak

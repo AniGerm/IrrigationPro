@@ -29,6 +29,13 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SWITCH, Platform.SENSOR, Platform.BINARY_SENSOR]
 
 
+def _frontend_panel_url() -> str:
+    """Return panel frontend URL with cache-busting query."""
+    import time
+    ts = int(time.time())
+    return f"/{DOMAIN}/frontend/index.html?_ts={ts}"
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up IrrigationPro from a config entry."""
     _LOGGER.debug("Setting up IrrigationPro with entry: %s", entry.entry_id)
@@ -71,7 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 sidebar_title="IrrigationPro",
                 sidebar_icon="mdi:sprinkler-variant",
                 frontend_url_path=DOMAIN,
-                config={"url": f"/{DOMAIN}/frontend/index.html"},
+                config={"url": _frontend_panel_url()},
                 require_admin=False,
             )
             hass.data[f"{DOMAIN}_panel_registered"] = True

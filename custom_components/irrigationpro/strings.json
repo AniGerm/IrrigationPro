@@ -33,6 +33,8 @@
           "zone_max_duration": "Max Duration (minutes)",
           "zone_rain_threshold": "Rain Threshold (mm)",
           "zone_rain_factoring": "Factor in rainfall",
+          "zone_weekdays": "Watering weekdays",
+          "zone_months": "Watering months",
           "zone_enabled": "Zone enabled",
           "zone_adaptive": "Adaptive watering"
         }
@@ -46,6 +48,7 @@
           "low_threshold": "Low temperature threshold (°C)",
           "high_threshold": "High temperature threshold (°C)",
           "recheck_time": "Recheck before run (minutes, 0 to disable)",
+          "language": "Language for UI and notifications",
           "pushover_enabled": "Enable Pushover notifications",
           "pushover_api_token": "Pushover API Token (Application Token)",
           "pushover_user_key": "Pushover User Key",

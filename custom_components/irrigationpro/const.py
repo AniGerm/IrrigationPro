@@ -30,6 +30,7 @@ CONF_CYCLES: Final = "cycles"
 CONF_LOW_THRESHOLD: Final = "low_threshold"
 CONF_HIGH_THRESHOLD: Final = "high_threshold"
 CONF_RECHECK_TIME: Final = "recheck_time"
+CONF_LANGUAGE: Final = "language"
 
 # Notifications
 CONF_PUSHOVER_ENABLED: Final = "pushover_enabled"
@@ -53,6 +54,7 @@ DEFAULT_CYCLES: Final = 2
 DEFAULT_LOW_THRESHOLD: Final = 5
 DEFAULT_HIGH_THRESHOLD: Final = 15
 DEFAULT_RECHECK_TIME: Final = 0
+DEFAULT_LANGUAGE: Final = "de"
 DEFAULT_PUSHOVER_ENABLED: Final = False
 DEFAULT_PUSHOVER_PRIORITY: Final = 0
 DEFAULT_DAILY_REPORT_ENABLED: Final = False

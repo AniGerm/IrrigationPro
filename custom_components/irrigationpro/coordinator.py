@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_CYCLES,
     CONF_HIGH_THRESHOLD,
+    CONF_LANGUAGE,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
     CONF_PUSHOVER_API_TOKEN,
@@ -48,6 +49,7 @@ from .const import (
     CONF_ZONE_SWITCH_ENTITY,
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
+    DEFAULT_LANGUAGE,
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_DAILY_REPORT_ENABLED,
     DEFAULT_DAILY_REPORT_HOUR,
@@ -62,35 +64,131 @@ from .weather_provider import WeatherData, WeatherProvider
 
 _LOGGER = logging.getLogger(__name__)
 
-_WEEKDAYS_DE = [
-    "Montag", "Dienstag", "Mittwoch", "Donnerstag",
-    "Freitag", "Samstag", "Sonntag",
-]
+_WEEKDAY_NAMES = {
+    "de": ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
+    "en": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+}
 
-_WEATHER_CONDITION_DE = {
-    "clear": "klar",
-    "sunny": "sonnig",
-    "partlycloudy": "teilweise bewölkt",
-    "partly cloudy": "teilweise bewölkt",
-    "cloudy": "bewölkt",
-    "overcast": "bedeckt",
-    "rain": "Regen",
-    "rainy": "regnerisch",
-    "pouring": "starker Regen",
-    "showers": "Schauer",
-    "light rain": "leichter Regen",
-    "moderate rain": "mäßiger Regen",
-    "heavy rain": "starker Regen",
-    "snow": "Schnee",
-    "snowy": "schneit",
-    "snowy-rainy": "Schneeregen",
-    "hail": "Hagel",
-    "fog": "Nebel",
-    "mist": "Dunst",
-    "windy": "windig",
-    "thunderstorm": "Gewitter",
-    "lightning": "Blitze",
-    "unknown": "unbekannt",
+_WEATHER_CONDITION_TEXT = {
+    "de": {
+        "clear": "klar",
+        "sunny": "sonnig",
+        "partlycloudy": "teilweise bewölkt",
+        "partly cloudy": "teilweise bewölkt",
+        "cloudy": "bewölkt",
+        "overcast": "bedeckt",
+        "rain": "Regen",
+        "rainy": "regnerisch",
+        "pouring": "starker Regen",
+        "showers": "Schauer",
+        "light rain": "leichter Regen",
+        "moderate rain": "mäßiger Regen",
+        "heavy rain": "starker Regen",
+        "snow": "Schnee",
+        "snowy": "schneit",
+        "snowy-rainy": "Schneeregen",
+        "hail": "Hagel",
+        "fog": "Nebel",
+        "mist": "Dunst",
+        "windy": "windig",
+        "thunderstorm": "Gewitter",
+        "lightning": "Blitze",
+        "unknown": "unbekannt",
+    },
+    "en": {
+        "clear": "clear",
+        "sunny": "sunny",
+        "partlycloudy": "partly cloudy",
+        "partly cloudy": "partly cloudy",
+        "cloudy": "cloudy",
+        "overcast": "overcast",
+        "rain": "rain",
+        "rainy": "rainy",
+        "pouring": "heavy rain",
+        "showers": "showers",
+        "light rain": "light rain",
+        "moderate rain": "moderate rain",
+        "heavy rain": "heavy rain",
+        "snow": "snow",
+        "snowy": "snow",
+        "snowy-rainy": "sleet",
+        "hail": "hail",
+        "fog": "fog",
+        "mist": "mist",
+        "windy": "windy",
+        "thunderstorm": "thunderstorm",
+        "lightning": "lightning",
+        "unknown": "unknown",
+    },
+}
+
+_TEXT = {
+    "de": {
+        "zone_disabled": "Zone deaktiviert",
+        "no_watering_day": "Kein Bewässerungstag ({weekday})",
+        "no_watering_month": "Kein Bewässerungsmonat",
+        "rain_threshold_exceeded": "Regenschwelle überschritten ({rain:.1f} mm >= {threshold} mm)",
+        "no_water_needed": "Kein Wasserbedarf (ETo durch Regen gedeckt)",
+        "temperature_too_low": "Temperatur zu niedrig (min: {min_temp:.1f}°C, max: {max_temp:.1f}°C – Schwelle: {low}/{high}°C)",
+        "title_watering_done": "✅ Bewässerung abgeschlossen",
+        "title_watering_error": "❌ Bewässerungsfehler",
+        "title_manual_start": "🚿 Manuelle Bewässerung",
+        "title_manual_done": "✅ Manuelle Bewässerung beendet",
+        "title_plan_today": "🗓 Bewässerung geplant",
+        "title_no_watering_today": "💤 Keine Bewässerung heute",
+        "title_test": "🔔 IrrigationPro Test",
+        "start": "Start",
+        "end": "Ende",
+        "total_duration": "Gesamtdauer",
+        "planned_duration": "Geplante Dauer",
+        "runtime": "Laufzeit",
+        "no_zones_configured": "Keine Zonen konfiguriert",
+        "next_recalc_before_run": "Nächste Neuberechnung vor geplantem Lauf: {when}",
+        "no_extra_recalc_before_run": "Keine zusätzliche Neuberechnung vor einem geplanten Lauf.\nReguläres Wetter-Update und Neuplanung alle {minutes} Minuten.",
+        "extra_recalc_before_start": "Zusätzliche Neuberechnung vor Start: {when}",
+        "no_extra_recalc_before_start": "Keine zusätzliche Neuberechnung vor Start.\nReguläres Wetter-Update und Neuplanung alle {minutes} Minuten.",
+        "next_extra_recalc": "Nächste zusätzliche Neuberechnung:\n{when}\n(zusätzlich zum regulären Update alle {minutes} Minuten)",
+        "no_extra_recalc_today": "Keine zusätzliche Neuberechnung für heute geplant.\nAutomatische Neuplanung beim nächsten Wetter-Update (alle {minutes} Minuten).",
+        "no_schedule_set": "Kein Zeitplan gesetzt",
+        "manual_zone_started": "Zone «{zone}» manuell gestartet\nGeplante Dauer: {duration} min.",
+        "manual_zone_stopped": "Zone «{zone}» beendet\nLaufzeit: {duration} min.\nStart: {start}\nEnde:  {end}",
+        "watering_error": "Fehler beim Bewässern: {error}",
+        "weather_footer": "───\n{day}: {condition}, {clouds}% Wolken\nSonnenaufgang: {sunrise} Uhr | Luftfeuchte: {humidity:.0f}%\nTemp.: {min_temp:.1f}°C – {max_temp:.1f}°C\nLuftdruck: {pressure:.0f} hPa | Wind: {wind:.1f} m/s\nNiederschlag: {rain:.2f} mm | ETo: {eto:.2f} mm",
+        "test_message": "Test-Benachrichtigung erfolgreich! Priorität: {priority}",
+    },
+    "en": {
+        "zone_disabled": "Zone disabled",
+        "no_watering_day": "Not a watering day ({weekday})",
+        "no_watering_month": "Not a watering month",
+        "rain_threshold_exceeded": "Rain threshold exceeded ({rain:.1f} mm >= {threshold} mm)",
+        "no_water_needed": "No watering needed (ETo covered by rain)",
+        "temperature_too_low": "Temperature too low (min: {min_temp:.1f}°C, max: {max_temp:.1f}°C - threshold: {low}/{high}°C)",
+        "title_watering_done": "✅ Watering completed",
+        "title_watering_error": "❌ Watering error",
+        "title_manual_start": "🚿 Manual watering",
+        "title_manual_done": "✅ Manual watering finished",
+        "title_plan_today": "🗓 Irrigation scheduled",
+        "title_no_watering_today": "💤 No watering today",
+        "title_test": "🔔 IrrigationPro Test",
+        "start": "Start",
+        "end": "End",
+        "total_duration": "Total duration",
+        "planned_duration": "Planned duration",
+        "runtime": "Runtime",
+        "no_zones_configured": "No zones configured",
+        "next_recalc_before_run": "Next recalculation before scheduled run: {when}",
+        "no_extra_recalc_before_run": "No additional recalculation before a scheduled run.\nRegular weather update and replanning every {minutes} minutes.",
+        "extra_recalc_before_start": "Additional recalculation before start: {when}",
+        "no_extra_recalc_before_start": "No additional recalculation before start.\nRegular weather update and replanning every {minutes} minutes.",
+        "next_extra_recalc": "Next additional recalculation:\n{when}\n(in addition to the regular update every {minutes} minutes)",
+        "no_extra_recalc_today": "No additional recalculation planned for today.\nAutomatic replanning at the next weather update (every {minutes} minutes).",
+        "no_schedule_set": "No schedule set",
+        "manual_zone_started": "Zone «{zone}» started manually\nPlanned duration: {duration} min.",
+        "manual_zone_stopped": "Zone «{zone}» finished\nRuntime: {duration} min.\nStart: {start}\nEnd:   {end}",
+        "watering_error": "Watering error: {error}",
+        "weather_footer": "───\n{day}: {condition}, {clouds}% clouds\nSunrise: {sunrise} | Humidity: {humidity:.0f}%\nTemp.: {min_temp:.1f}°C – {max_temp:.1f}°C\nPressure: {pressure:.0f} hPa | Wind: {wind:.1f} m/s\nPrecipitation: {rain:.2f} mm | ETo: {eto:.2f} mm",
+        "test_message": "Test notification sent successfully! Priority: {priority}",
+    },
 }
 
 
@@ -326,9 +424,12 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 forecast_day.max_temp,
             )
             self.scheduled_run = None
-            self.schedule_reason = (
-                f"Temperatur zu niedrig (min: {forecast_day.min_temp:.1f}°C, "
-                f"max: {forecast_day.max_temp:.1f}°C – Schwelle: {low_threshold}/{high_threshold}°C)"
+            self.schedule_reason = self._txt(
+                "temperature_too_low",
+                min_temp=forecast_day.min_temp,
+                max_temp=forecast_day.max_temp,
+                low=low_threshold,
+                high=high_threshold,
             )
             self._log_skip_event(self.schedule_reason, forecast_day)
             self.recheck_scheduled = None
@@ -380,7 +481,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     ) -> float:
         """Calculate watering duration for a zone in minutes."""
         if not zone.enabled:
-            zone.skip_reason = "Zone deaktiviert"
+            zone.skip_reason = self._txt("zone_disabled")
             return 0
         
         # Check if this is a valid watering day
@@ -390,12 +491,12 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         if weekday not in zone.weekdays:
             _LOGGER.debug("Zone '%s': Not scheduled for this day", zone.name)
-            zone.skip_reason = f"Kein Bewässerungstag ({weekday})"
+            zone.skip_reason = self._txt("no_watering_day", weekday=weekday)
             return 0
         
         if month not in zone.months:
             _LOGGER.debug("Zone '%s': Not scheduled for this month", zone.name)
-            zone.skip_reason = "Kein Bewässerungsmonat"
+            zone.skip_reason = self._txt("no_watering_month")
             return 0
         
         if not zone.adaptive:
@@ -444,9 +545,10 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     zone.name,
                     self.forecast[day_index].rain,
                 )
-                zone.skip_reason = (
-                    f"Regenschwelle überschritten "
-                    f"({self.forecast[day_index].rain:.1f} mm >= {zone.rain_threshold} mm)"
+                zone.skip_reason = self._txt(
+                    "rain_threshold_exceeded",
+                    rain=self.forecast[day_index].rain,
+                    threshold=zone.rain_threshold,
                 )
                 return 0
         
@@ -485,7 +587,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             duration = zone.max_duration
         
         if duration == 0:
-            zone.skip_reason = "Kein Wasserbedarf (ETo durch Regen gedeckt)"
+            zone.skip_reason = self._txt("no_water_needed")
         else:
             zone.skip_reason = ""
         
@@ -545,27 +647,26 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             zone_lines = self._format_zone_lines("\u2705")
 
             if self.recheck_scheduled:
-                next_calc = (
-                    f"Nächste Neuberechnung vor geplantem Lauf: "
-                    f"{self._fmt_dt(self.recheck_scheduled)}"
+                next_calc = self._txt(
+                    "next_recalc_before_run",
+                    when=self._fmt_dt(self.recheck_scheduled),
                 )
             else:
-                next_calc = (
-                    "Keine zusätzliche Neuberechnung vor einem geplanten Lauf.\n"
-                    f"Reguläres Wetter-Update und Neuplanung alle "
-                    f"{UPDATE_INTERVAL_MINUTES} Minuten."
+                next_calc = self._txt(
+                    "no_extra_recalc_before_run",
+                    minutes=UPDATE_INTERVAL_MINUTES,
                 )
 
             message = (
-                f"Start: {self._fmt_dt(self._watering_started_at)}\n"
-                f"Ende:  {self._fmt_dt(finished_at)}\n"
-                f"Gesamtdauer: {self._fmt_duration(actual_min)} min.\n\n"
+                f"{self._txt('start')}: {self._fmt_dt(self._watering_started_at)}\n"
+                f"{self._txt('end')}:  {self._fmt_dt(finished_at)}\n"
+                f"{self._txt('total_duration')}: {self._fmt_duration(actual_min)} min.\n\n"
                 f"{zone_lines}\n\n"
                 f"{next_calc}\n\n"
                 f"{self._format_weather_footer()}"
             )
             await self._send_pushover_notification(
-                "\u2705 Bew\u00e4sserung abgeschlossen", message, priority=0
+                self._txt("title_watering_done"), message, priority=0
             )
 
             # Update last run times
@@ -582,8 +683,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         except Exception as err:
             _LOGGER.error("Error during watering cycle: %s", err)
             await self._send_pushover_notification(
-                "\u274c Bew\u00e4sserungsfehler",
-                f"Fehler beim Bew\u00e4ssern: {err}",
+                self._txt("title_watering_error"),
+                self._txt("watering_error", error=err),
                 priority=0
             )
 
@@ -672,9 +773,12 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         zone.duration = duration
 
         await self._send_pushover_notification(
-            "\U0001f6bf Manuelle Bew\u00e4sserung",
-            f"Zone \u00ab{zone.name}\u00bb manuell gestartet\n"
-            f"Geplante Dauer: {self._fmt_duration(duration)} min.",
+            self._txt("title_manual_start"),
+            self._txt(
+                "manual_zone_started",
+                zone=zone.name,
+                duration=self._fmt_duration(duration),
+            ),
             priority=-1,
         )
 
@@ -693,11 +797,14 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             ended = dt_util.now()
             actual_min = (ended - started).total_seconds() / 60
             await self._send_pushover_notification(
-                "\u2705 Manuelle Bew\u00e4sserung beendet",
-                f"Zone \u00ab{zone.name}\u00bb beendet\n"
-                f"Laufzeit: {self._fmt_duration(actual_min)} min.\n"
-                f"Start: {self._fmt_dt(started)}\n"
-                f"Ende:  {self._fmt_dt(ended)}",
+                self._txt("title_manual_done"),
+                self._txt(
+                    "manual_zone_stopped",
+                    zone=zone.name,
+                    duration=self._fmt_duration(actual_min),
+                    start=self._fmt_dt(started),
+                    end=self._fmt_dt(ended),
+                ),
                 priority=-1,
             )
 
@@ -739,6 +846,25 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     # Notification helpers
     # ------------------------------------------------------------------
 
+    def _lang(self) -> str:
+        """Return configured UI/notification language."""
+        language = self.entry.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+        return language if language in ("de", "en") else DEFAULT_LANGUAGE
+
+    def _txt(self, key: str, **kwargs: Any) -> str:
+        """Return localized backend text."""
+        text = _TEXT[self._lang()].get(key, key)
+        return text.format(**kwargs) if kwargs else text
+
+    def _weekday_name(self, weekday_index: int) -> str:
+        """Return localized weekday name."""
+        return _WEEKDAY_NAMES[self._lang()][weekday_index]
+
+    def _weather_condition_text(self, raw_condition: str) -> str:
+        """Return localized weather condition string."""
+        language = self._lang()
+        return _WEATHER_CONDITION_TEXT[language].get(raw_condition.lower(), raw_condition)
+
     @staticmethod
     def _fmt_duration(minutes: float) -> str:
         """Format minutes as MM:SS string (e.g. 06:42)."""
@@ -756,7 +882,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 lines.append(
                     f"{prefix} {z.name}: {total} min.  ({cycles}\u00d7 {per_c} min.)"
                 )
-        return "\n".join(lines) if lines else "Keine Zonen konfiguriert"
+        return "\n".join(lines) if lines else self._txt("no_zones_configured")
 
     def _format_weather_footer(self) -> str:
         """Build a compact weather summary block for notifications."""
@@ -764,9 +890,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             return ""
         try:
             d = self.forecast[0]
-            day_name = _WEEKDAYS_DE[d.sunrise.weekday()] if d.sunrise else ""
+            day_name = self._weekday_name(d.sunrise.weekday()) if d.sunrise else ""
             raw_condition = (d.condition or d.summary or "").strip()
-            condition = _WEATHER_CONDITION_DE.get(raw_condition.lower(), raw_condition)
+            condition = self._weather_condition_text(raw_condition)
             clouds = f"{d.clouds:.0f}" if d.clouds is not None else "?"
             sunrise_str = d.sunrise.strftime("%H:%M") if d.sunrise else "?"
             humidity = d.humidity if d.humidity is not None else 0
@@ -776,13 +902,19 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             wind = d.wind_speed if d.wind_speed is not None else 0
             rain = d.rain if d.rain is not None else 0
             eto = d.eto if d.eto is not None else 0
-            return (
-                "\u2500\u2500\u2500\n"
-                f"{day_name}: {condition}, {clouds}% Wolken\n"
-                f"Sonnenaufgang: {sunrise_str} Uhr | Luftfeuchte: {humidity:.0f}%\n"
-                f"Temp.: {min_t:.1f}\u00b0C \u2013 {max_t:.1f}\u00b0C\n"
-                f"Luftdruck: {pressure:.0f}\u202fhPa | Wind: {wind:.1f}\u202fm/s\n"
-                f"Niederschlag: {rain:.2f}\u202fmm | ETo: {eto:.2f}\u202fmm"
+            return self._txt(
+                "weather_footer",
+                day=day_name,
+                condition=condition,
+                clouds=clouds,
+                sunrise=sunrise_str,
+                humidity=humidity,
+                min_temp=min_t,
+                max_temp=max_t,
+                pressure=pressure,
+                wind=wind,
+                rain=rain,
+                eto=eto,
             )
         except Exception as err:
             _LOGGER.warning("Failed to format weather footer: %s", err)
@@ -791,7 +923,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     def _fmt_dt(self, dt: datetime) -> str:
         """Format datetime as 'Wochentag DD.MM.YYYY, HH:MM Uhr'."""
         local = dt.astimezone(dt_util.now().tzinfo)
-        return f"{_WEEKDAYS_DE[local.weekday()]} {local.strftime('%d.%m.%Y, %H:%M')} Uhr"
+        suffix = " Uhr" if self._lang() == "de" else ""
+        return f"{self._weekday_name(local.weekday())} {local.strftime('%d.%m.%Y, %H:%M')}{suffix}"
 
     # ------------------------------------------------------------------
 
@@ -821,51 +954,49 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             zone_lines = self._format_zone_lines("\U0001f331")
 
             if self.recheck_scheduled:
-                recheck_str = (
-                    f"Zusätzliche Neuberechnung vor Start: "
-                    f"{self._fmt_dt(self.recheck_scheduled)}"
+                recheck_str = self._txt(
+                    "extra_recalc_before_start",
+                    when=self._fmt_dt(self.recheck_scheduled),
                 )
             else:
-                recheck_str = (
-                    "Keine zusätzliche Neuberechnung vor Start.\n"
-                    f"Reguläres Wetter-Update und Neuplanung alle "
-                    f"{UPDATE_INTERVAL_MINUTES} Minuten."
+                recheck_str = self._txt(
+                    "no_extra_recalc_before_start",
+                    minutes=UPDATE_INTERVAL_MINUTES,
                 )
 
             message = (
-                f"Start: {self._fmt_dt(self.scheduled_run)}\n"
-                f"Ende:  {self._fmt_dt(end_time)}\n"
-                f"Gesamtdauer: {self._fmt_duration(total_min)} min.\n\n"
+                f"{self._txt('start')}: {self._fmt_dt(self.scheduled_run)}\n"
+                f"{self._txt('end')}:  {self._fmt_dt(end_time)}\n"
+                f"{self._txt('total_duration')}: {self._fmt_duration(total_min)} min.\n\n"
                 f"{zone_lines}\n\n"
                 f"{recheck_str}\n\n"
                 f"{weather}"
             )
             await self._send_pushover_notification(
-                "\U0001f5d3 Bew\u00e4sserung geplant", message, priority=-1
+                self._txt("title_plan_today"), message, priority=-1
             )
         else:
-            reason = self.schedule_reason or "Kein Bew\u00e4sserungsbedarf"
+            reason = self.schedule_reason or self._txt("no_water_needed")
 
             if self.recheck_scheduled:
-                next_calc = (
-                    f"Nächste zusätzliche Neuberechnung:\n"
-                    f"{self._fmt_dt(self.recheck_scheduled)}\n"
-                    f"(zusätzlich zum regulären Update alle {UPDATE_INTERVAL_MINUTES} Minuten)"
+                next_calc = self._txt(
+                    "next_extra_recalc",
+                    when=self._fmt_dt(self.recheck_scheduled),
+                    minutes=UPDATE_INTERVAL_MINUTES,
                 )
             else:
-                next_calc = (
-                    "Keine zusätzliche Neuberechnung für heute geplant.\n"
-                    f"Automatische Neuplanung beim nächsten Wetter-Update "
-                    f"(alle {UPDATE_INTERVAL_MINUTES} Minuten)."
+                next_calc = self._txt(
+                    "no_extra_recalc_today",
+                    minutes=UPDATE_INTERVAL_MINUTES,
                 )
 
             message = (
-                f"Kein Zeitplan gesetzt:\n\u203a {reason}\n\n"
+                f"{self._txt('no_schedule_set')}:\n\u203a {reason}\n\n"
                 f"{next_calc}\n\n"
                 f"{weather}"
             )
             await self._send_pushover_notification(
-                "\U0001f4a4 Keine Bew\u00e4sserung heute", message, priority=-2
+                self._txt("title_no_watering_today"), message, priority=-2
             )
 
     def _log_zone_run(
@@ -906,7 +1037,12 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         ):
             return
         event_type = "skip"
-        if "Bewässerungsbedarf" in reason or "Regen gedeckt" in reason:
+        if any(token in reason for token in (
+            "Kein Wasserbedarf",
+            "No watering needed",
+            "Regen gedeckt",
+            "covered by rain",
+        )):
             event_type = "no_water"
         self.history.append({
             "type": event_type,
@@ -993,7 +1129,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                         "zone_id": zone.zone_id,
                         "name": zone.name,
                         "duration": 0,
-                        "skip_reason": "Zone deaktiviert / Zone disabled",
+                        "skip_reason": self._txt("zone_disabled"),
                     })
         finally:
             self.forecast = real_forecast
@@ -1008,7 +1144,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 start_time = sunrise - timedelta(minutes=total_duration + sunrise_offset)
             scheduled_would_be = start_time.isoformat()
         else:
-            schedule_reason = "Kein Bewässerungsbedarf / No watering needed"
+            schedule_reason = self._txt("no_water_needed")
 
         return {
             "zones": zone_results,

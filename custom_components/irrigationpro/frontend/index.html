@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>IrrigationPro Dashboard</title>
   <style>
     :root {
@@ -576,11 +579,129 @@
       text-align: center;
     }
 
+    .schedule-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .schedule-col {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(33, 150, 243, 0.06);
+    }
+    .schedule-col h4 {
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .checklist {
+      display: grid;
+      gap: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .checklist label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text);
+      user-select: none;
+    }
+    .schedule-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+    .backup-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .backup-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .backup-field label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .backup-field input,
+    .backup-field select,
+    .backup-field textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text);
+      padding: 8px;
+      font-size: 13px;
+    }
+    .backup-zone-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 10px;
+      background: rgba(33, 150, 243, 0.06);
+    }
+    .backup-zone-title {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 8px;
+    }
+
+    .solar-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .solar-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .solar-field label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .solar-field input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text);
+      padding: 8px;
+      font-size: 14px;
+      text-align: center;
+    }
+    .solar-field.current-month {
+      background: rgba(33, 150, 243, 0.12);
+      border-radius: 10px;
+      padding: 6px;
+    }
+
     @media (max-width: 600px) {
       .grid { grid-template-columns: 1fr; }
       .info-grid { grid-template-columns: 1fr; }
       .forecast-table { font-size: 12px; }
       .forecast-table th, .forecast-table td { padding: 8px; }
+      .schedule-grid { grid-template-columns: 1fr; }
+      .backup-grid { grid-template-columns: 1fr; }
+      .solar-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -633,11 +754,91 @@
     </div>
   </div>
 
+  <!-- Backup / Restore Modal -->
+  <div class="modal-backdrop" id="backupModal" onclick="if(event.target===this)closeBackupModal()">
+    <div class="modal" style="max-width:640px">
+      <button class="modal-close" onclick="closeBackupModal()">✕</button>
+      <div class="modal-title" data-i18n="backup.title">💾 Backup / Restore</div>
+      <div class="modal-section">
+        <h3 data-i18n="backup.export_title">Export</h3>
+        <p data-i18n="backup.export_desc" style="font-size:13px;color:var(--text-secondary);margin-bottom:10px">Komplette Konfiguration als JSON-Backup herunterladen.</p>
+        <button class="btn btn-primary btn-sm" onclick="exportBackup()" id="exportBackupBtn">
+          <span data-i18n="backup.export_btn">⬇ Backup herunterladen</span>
+        </button>
+      </div>
+      <div class="modal-section" style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+        <h3 data-i18n="backup.restore_title">Restore</h3>
+        <p data-i18n="backup.restore_desc" style="font-size:13px;color:var(--text-secondary);margin-bottom:10px">Backup-Datei hochladen, prüfen und dann speichern.</p>
+        <input type="file" id="backupFileInput" accept=".json" onchange="loadBackupFile(event)"
+          style="display:block;margin-bottom:8px;width:100%;color:var(--text)">
+        <textarea id="backupJsonInput" rows="8"
+          placeholder='{"backup_format": "irrigationpro-backup-v1", ...}'
+          style="width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:8px;background:var(--card);color:var(--text);border:1px solid var(--border);resize:vertical"></textarea>
+        <div id="backupIssues" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:13px"></div>
+        <div id="backupDraftEditor" style="display:none;margin-top:10px"></div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" onclick="closeBackupModal()" data-i18n="sched.cancel">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" onclick="prepareBackupDraft()" id="prepareBackupBtn">
+            <span data-i18n="backup.prepare_btn">🔎 Laden und prüfen</span>
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="applyBackupDraft()" id="applyBackupBtn" style="display:none">
+            <span data-i18n="backup.apply_btn">💾 Prüfen und speichern</span>
+          </button>
+        </div>
+        <div id="backupRestoreResult" style="display:none;margin-top:10px;padding:10px;border-radius:8px;font-size:13px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zone Schedule Modal -->
+  <div class="modal-backdrop" id="zoneScheduleModal" onclick="if(event.target===this)closeZoneScheduleModal()">
+    <div class="modal" style="max-width:640px">
+      <button class="modal-close" onclick="closeZoneScheduleModal()">✕</button>
+      <div class="modal-title" id="zoneScheduleTitle">🗓️</div>
+      <div class="modal-section">
+        <h3 data-i18n="sched.desc_title">Bewässerungsplan bearbeiten</h3>
+        <p data-i18n="sched.desc">Wähle die erlaubten Bewässerungstage und Monate für diese Zone.</p>
+        <div class="schedule-grid">
+          <div class="schedule-col">
+            <h4 data-i18n="sched.weekdays">Wochentage</h4>
+            <div class="checklist" id="schedWeekdaysList"></div>
+          </div>
+          <div class="schedule-col">
+            <h4 data-i18n="sched.months">Monate</h4>
+            <div class="checklist" id="schedMonthsList"></div>
+          </div>
+        </div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" onclick="closeZoneScheduleModal()" data-i18n="sched.cancel">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" id="saveZoneScheduleBtn" onclick="saveZoneSchedule()" data-i18n="sched.save">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Solar Radiation Editor Modal -->
+  <div class="modal-backdrop" id="solarModal" onclick="if(event.target===this)closeSolarModal()">
+    <div class="modal" style="max-width:560px">
+      <button class="modal-close" onclick="closeSolarModal()">✕</button>
+      <div class="modal-title" data-i18n="solar.title">☀️ Sonneneinstrahlung (kWh/Tag)</div>
+      <div class="modal-section">
+        <p data-i18n="solar.desc" style="font-size:13px;color:var(--text-secondary);margin-bottom:10px">Monatliche Durchschnittswerte der Sonneneinstrahlung in kWh pro Tag.</p>
+        <div class="solar-grid" id="solarGrid"></div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" onclick="closeSolarModal()" data-i18n="sched.cancel">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" id="saveSolarBtn" onclick="saveSolarValues()" data-i18n="solar.save">💾 Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="header">
-    <h1>🌿 IrrigationPro Dashboard</h1>
+    <h1>🌿 IrrigationPro Dashboard <span id="uiVersion" style="font-size:12px;color:var(--text-secondary);font-weight:500">--</span></h1>
     <div class="header-actions">
       <span class="auto-refresh" id="lastUpdate">--</span>
       <button class="btn-test" onclick="openHistoryModal()" title="Historie">🗓️</button>
+      <button class="btn-test" onclick="openSolarModal()" id="solarBtn" title="Sonneneinstrahlung">☀️</button>
+      <button class="btn-test" onclick="openBackupModal()" id="backupBtn" title="Backup / Restore">💾</button>
       <button class="btn-test" onclick="openTestModal()" title="Test-Modus">🧪</button>
       <button class="btn-lang" onclick="toggleLang()" id="langBtn">EN</button>
       <button class="btn btn-primary btn-sm" onclick="recalculate()">
@@ -661,6 +862,10 @@
     <div class="status-item">
       <span class="status-label" data-i18n="status.last_update">Letztes Update</span>
       <span class="status-value" id="dataUpdate">--</span>
+    </div>
+    <div class="status-item" style="cursor:pointer" onclick="openSolarModal()" title="☀️ Sonneneinstrahlung bearbeiten">
+      <span class="status-label" data-i18n="status.month_value">Monatswert (Solar)</span>
+      <span class="status-value" id="monthSolarValue" style="text-decoration:underline dotted">--</span>
     </div>
   </div>
 
@@ -701,6 +906,7 @@
         'status.next_watering': 'Nächste Bewässerung',
         'status.active_zones': 'Aktive Zonen',
         'status.last_update': 'Letztes Update',
+        'status.month_value': 'Monatswert (Solar)',
         'zone.disabled': 'Deaktiviert',
         'zone.running': '● Aktiv',
         'zone.idle': 'Bereit',
@@ -719,6 +925,7 @@
         'btn.start': '▶ Start',
         'btn.disable': '⏸ Deaktivieren',
         'btn.enable': '✓ Aktivieren',
+        'btn.schedule': '🗓 Plan',
         'btn.stopping': '⏳ Stoppt…',
         'btn.starting': '⏳ Startet…',
         'entity.on': 'EIN',
@@ -771,6 +978,40 @@
         'test.skipped': 'Übersprungen',
         'test.min': 'min',
         'test.fake_weather': '☀️ Testklima: 35°C max, 0mm Regen, 30% Feuchte, ETo {eto} mm',
+        'sched.desc_title': 'Bewässerungsplan bearbeiten',
+        'sched.desc': 'Wähle die erlaubten Bewässerungstage und Monate für diese Zone.',
+        'sched.weekdays': 'Wochentage',
+        'sched.months': 'Monate',
+        'sched.cancel': 'Abbrechen',
+        'sched.save': 'Speichern',
+        'sched.saving': '⏳ Speichert…',
+        'sched.none': 'Keine',
+        'toast.schedule_saved': 'Bewässerungsplan für Zone {id} gespeichert',
+        'toast.schedule_error': 'Fehler beim Speichern des Plans',
+        'backup.title': '💾 Backup / Restore',
+        'backup.export_title': 'Export',
+        'backup.export_desc': 'Komplette Konfiguration als JSON-Backup herunterladen.',
+        'backup.export_btn': '⬇ Backup herunterladen',
+        'backup.restore_title': 'Restore',
+        'backup.restore_desc': 'Backup-Datei hochladen, prüfen und dann speichern.',
+        'backup.prepare_btn': '🔎 Laden und prüfen',
+        'backup.apply_btn': '💾 Prüfen und speichern',
+        'backup.preparing': '⏳ Lädt und prüft…',
+        'backup.applying': '⏳ Speichert…',
+        'backup.loaded': 'Backup geladen. Bitte Werte prüfen und dann speichern.',
+        'backup.warnings': 'Hinweise',
+        'backup.errors': 'Fehler',
+        'toast.backup_exported': '✅ Backup heruntergeladen',
+        'toast.backup_error': 'Fehler beim Backup-Export',
+        'toast.backup_loaded': '✅ Backup geladen, bitte prüfen',
+        'toast.backup_restored': '✅ Konfiguration wiederhergestellt',
+        'toast.backup_restore_error': 'Fehler beim Wiederherstellen',
+        'solar.title': '☀️ Sonneneinstrahlung (kWh/Tag)',
+        'solar.desc': 'Monatliche Durchschnittswerte der Sonneneinstrahlung in kWh pro Tag. Diese Werte beeinflussen die ETo-Berechnung.',
+        'solar.save': '💾 Speichern',
+        'solar.saving': '⏳ Speichert…',
+        'toast.solar_saved': '✅ Sonneneinstrahlung gespeichert',
+        'toast.solar_error': 'Fehler beim Speichern der Sonneneinstrahlung',
         'no_scheduled': 'Nicht geplant',
         'hist.title': '🗓️ Bewässerungs-Historie',
         'hist.calendar_range': 'Kalenderübersicht',
@@ -801,6 +1042,7 @@
         'status.next_watering': 'Next Watering',
         'status.active_zones': 'Active Zones',
         'status.last_update': 'Last Update',
+        'status.month_value': 'Monthly value (solar)',
         'zone.disabled': 'Disabled',
         'zone.running': '● Active',
         'zone.idle': 'Ready',
@@ -819,6 +1061,7 @@
         'btn.start': '▶ Start',
         'btn.disable': '⏸ Disable',
         'btn.enable': '✓ Enable',
+        'btn.schedule': '🗓 Schedule',
         'btn.stopping': '⏳ Stopping…',
         'btn.starting': '⏳ Starting…',
         'entity.on': 'ON',
@@ -871,6 +1114,40 @@
         'test.skipped': 'Skipped',
         'test.min': 'min',
         'test.fake_weather': '☀️ Test climate: 35°C max, 0mm rain, 30% humidity, ETo {eto} mm',
+        'sched.desc_title': 'Edit watering schedule',
+        'sched.desc': 'Choose allowed watering weekdays and months for this zone.',
+        'sched.weekdays': 'Weekdays',
+        'sched.months': 'Months',
+        'sched.cancel': 'Cancel',
+        'sched.save': 'Save',
+        'sched.saving': '⏳ Saving…',
+        'sched.none': 'None',
+        'toast.schedule_saved': 'Watering schedule saved for zone {id}',
+        'toast.schedule_error': 'Failed to save schedule',
+        'backup.title': '💾 Backup / Restore',
+        'backup.export_title': 'Export',
+        'backup.export_desc': 'Download complete configuration as a JSON backup.',
+        'backup.export_btn': '⬇ Download Backup',
+        'backup.restore_title': 'Restore',
+        'backup.restore_desc': 'Upload backup, review values, then save.',
+        'backup.prepare_btn': '🔎 Load and review',
+        'backup.apply_btn': '💾 Review and save',
+        'backup.preparing': '⏳ Loading and validating…',
+        'backup.applying': '⏳ Saving…',
+        'backup.loaded': 'Backup loaded. Please review values before saving.',
+        'backup.warnings': 'Warnings',
+        'backup.errors': 'Errors',
+        'toast.backup_exported': '✅ Backup downloaded',
+        'toast.backup_error': 'Backup export failed',
+        'toast.backup_loaded': '✅ Backup loaded, review before save',
+        'toast.backup_restored': '✅ Configuration restored',
+        'toast.backup_restore_error': 'Failed to restore backup',
+        'solar.title': '☀️ Solar Radiation (kWh/day)',
+        'solar.desc': 'Monthly average solar radiation values in kWh per day. These values affect the ETo calculation.',
+        'solar.save': '💾 Save',
+        'solar.saving': '⏳ Saving…',
+        'toast.solar_saved': '✅ Solar radiation saved',
+        'toast.solar_error': 'Failed to save solar radiation',
         'no_scheduled': 'Not scheduled',
         'hist.title': '🗓️ Irrigation History',
         'hist.calendar_range': 'Calendar Overview',
@@ -895,6 +1172,7 @@
       }
     };
 
+    const UI_VERSION = '1.4.14';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -911,13 +1189,37 @@
       // Update lang toggle label (shows the OTHER language you can switch to)
       const lb = document.getElementById('langBtn');
       if (lb) lb.textContent = lang === 'de' ? 'EN' : 'DE';
+      const vb = document.getElementById('uiVersion');
+      if (vb) vb.textContent = `UI ${UI_VERSION}`;
     }
 
-    function toggleLang() {
-      lang = lang === 'de' ? 'en' : 'de';
+    async function persistLanguage(nextLang) {
+      const entryId = _lastData?.entries?.[0]?.entry_id;
+      const resp = await fetch(API_BASE + '/settings/language', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ language: nextLang, entry_id: entryId })
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    }
+
+    async function toggleLang() {
+      const previous = lang;
+      const next = lang === 'de' ? 'en' : 'de';
+      lang = next;
       localStorage.setItem('irrigationpro_lang', lang);
       applyI18n();
       if (_lastData) renderData(_lastData);
+      try {
+        await persistLanguage(next);
+      } catch (err) {
+        lang = previous;
+        localStorage.setItem('irrigationpro_lang', lang);
+        applyI18n();
+        if (_lastData) renderData(_lastData);
+        showToast((lang === 'de' ? 'Fehler beim Speichern der Sprache: ' : 'Failed to save language: ') + err.message, 'error');
+      }
     }
 
     let _lastData = null;
@@ -1034,6 +1336,124 @@
       saturday: { de: 'Samstag', en: 'Saturday' },
       sunday: { de: 'Sonntag', en: 'Sunday' }
     };
+
+    const MONTH_NAMES = {
+      1: { de: 'Januar', en: 'January' },
+      2: { de: 'Februar', en: 'February' },
+      3: { de: 'März', en: 'March' },
+      4: { de: 'April', en: 'April' },
+      5: { de: 'Mai', en: 'May' },
+      6: { de: 'Juni', en: 'June' },
+      7: { de: 'Juli', en: 'July' },
+      8: { de: 'August', en: 'August' },
+      9: { de: 'September', en: 'September' },
+      10: { de: 'Oktober', en: 'October' },
+      11: { de: 'November', en: 'November' },
+      12: { de: 'Dezember', en: 'December' }
+    };
+
+    let _scheduleEditZoneId = null;
+
+    function formatWeekdays(days) {
+      if (!Array.isArray(days) || days.length === 0) return t('sched.none');
+      return days.map(d => WEEKDAY_NAMES[String(d).toLowerCase()]?.[lang] || d).join(', ');
+    }
+
+    function formatMonths(months) {
+      if (!Array.isArray(months) || months.length === 0) return t('sched.none');
+      return months
+        .map(m => Number(m))
+        .filter(m => m >= 1 && m <= 12)
+        .sort((a, b) => a - b)
+        .map(m => MONTH_NAMES[m]?.[lang] || String(m))
+        .join(', ');
+    }
+
+    function openZoneScheduleModal(zoneId) {
+      if (!_lastData?.entries?.[0]?.zones) return;
+      const zone = _lastData.entries[0].zones.find(z => z.zone_id === zoneId);
+      if (!zone) return;
+
+      _scheduleEditZoneId = zoneId;
+      document.getElementById('zoneScheduleTitle').textContent = `🗓 ${zone.name}`;
+
+      const weekdaysList = document.getElementById('schedWeekdaysList');
+      const monthsList = document.getElementById('schedMonthsList');
+      weekdaysList.innerHTML = '';
+      monthsList.innerHTML = '';
+
+      const selectedDays = new Set((zone.weekdays || []).map(d => String(d).toLowerCase()));
+      const selectedMonths = new Set((zone.months || []).map(m => Number(m)));
+
+      Object.keys(WEEKDAY_NAMES).forEach(day => {
+        const checked = selectedDays.has(day) ? 'checked' : '';
+        weekdaysList.insertAdjacentHTML(
+          'beforeend',
+          `<label><input type="checkbox" class="sched-day" value="${day}" ${checked}> ${WEEKDAY_NAMES[day][lang]}</label>`
+        );
+      });
+
+      for (let m = 1; m <= 12; m++) {
+        const checked = selectedMonths.has(m) ? 'checked' : '';
+        monthsList.insertAdjacentHTML(
+          'beforeend',
+          `<label><input type="checkbox" class="sched-month" value="${m}" ${checked}> ${MONTH_NAMES[m][lang]}</label>`
+        );
+      }
+
+      document.getElementById('zoneScheduleModal').classList.add('open');
+      document.querySelectorAll('#zoneScheduleModal [data-i18n]').forEach(el => {
+        el.textContent = t(el.getAttribute('data-i18n'));
+      });
+    }
+
+    function closeZoneScheduleModal() {
+      _scheduleEditZoneId = null;
+      document.getElementById('zoneScheduleModal').classList.remove('open');
+    }
+
+    async function saveZoneSchedule() {
+      if (!_scheduleEditZoneId) return;
+      const saveBtn = document.getElementById('saveZoneScheduleBtn');
+      const prevLabel = saveBtn.textContent;
+
+      const days = Array.from(document.querySelectorAll('.sched-day:checked')).map(el => el.value);
+      const months = Array.from(document.querySelectorAll('.sched-month:checked')).map(el => Number(el.value));
+
+      if (!days.length || !months.length) {
+        showToast(t('toast.schedule_error') + ': weekdays/months empty', 'error');
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = t('sched.saving');
+
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const resp = await fetch(API_BASE + '/zones/schedule', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({
+            entry_id: entryId,
+            zone_id: _scheduleEditZoneId,
+            zone_weekdays: days,
+            zone_months: months
+          })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+
+        showToast(t('toast.schedule_saved', { id: _scheduleEditZoneId }), 'success');
+        closeZoneScheduleModal();
+        await loadData();
+      } catch (err) {
+        showToast(t('toast.schedule_error') + ': ' + err.message, 'error');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = prevLabel;
+      }
+    }
 
     function translateBackendReason(reason) {
       if (!reason) return reason;
@@ -1210,6 +1630,12 @@
         hideAuthBanner();
 
         const data = await resp.json();
+        const backendLang = data.entries?.[0]?.language;
+        if (backendLang && backendLang !== lang) {
+          lang = backendLang;
+          localStorage.setItem('irrigationpro_lang', lang);
+          applyI18n();
+        }
         _lastData = data;
         renderData(data);
 
@@ -1228,7 +1654,7 @@
 
       } catch(err) {
         console.error('[IrrPro] Load error:', err);
-        showToast('Fehler beim Laden: ' + err.message, 'error');
+        showToast((lang === 'de' ? 'Fehler beim Laden: ' : 'Load error: ') + err.message, 'error');
       }
     }
 
@@ -1248,6 +1674,17 @@
         entry.zones.filter(z => z.is_running).length + ' / ' + entry.zones.length;
       document.getElementById('dataUpdate').textContent =
         entry.last_update ? formatDate(entry.last_update) : '--';
+      const monthSolarEl = document.getElementById('monthSolarValue');
+      if (monthSolarEl) {
+        const monthNum = Number(entry.current_month || 0);
+        const monthLabel = (monthNum >= 1 && monthNum <= 12)
+          ? (MONTH_NAMES[monthNum]?.[lang] || String(monthNum))
+          : '--';
+        const val = entry.current_month_solar_radiation;
+        monthSolarEl.textContent = (val !== null && val !== undefined)
+          ? `${monthLabel}: ${Number(val).toFixed(2)} kWh/d`
+          : '--';
+      }
 
       // Reason why no schedule
       let srEl = document.getElementById('scheduleReason');
@@ -1283,6 +1720,7 @@
         const toggleBtn = zone.enabled
           ? `<button class="btn btn-sm" style="background:rgba(244,67,54,0.15);color:var(--danger)" onclick="toggleZoneEnabled(${zone.zone_id}, false)">${t('btn.disable')}</button>`
           : `<button class="btn btn-sm" style="background:rgba(76,175,80,0.15);color:var(--success)" onclick="toggleZoneEnabled(${zone.zone_id}, true)">${t('btn.enable')}</button>`;
+        const scheduleBtn = `<button class="btn btn-sm" style="background:rgba(33,150,243,0.16);color:var(--primary)" onclick="openZoneScheduleModal(${zone.zone_id})">${t('btn.schedule')}</button>`;
         const startStopBtn = zone.is_running
           ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'stop')">${t('btn.stop')}</button>`
           : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" value="${zone.duration > 0 ? Math.round(zone.duration) : 10}" min="1" max="180" title="${t('zone.duration')}">
@@ -1314,8 +1752,10 @@
               <span>🔄 ${t('zone.last_calc')}: ${entry.last_calculated ? formatDate(entry.last_calculated) : '--'}</span>
               <span>⏱️ ${t('zone.next_auto_calc')}: ${entry.next_automatic_calculation ? formatDate(entry.next_automatic_calculation) : '--'}</span>
               ${entry.recheck_scheduled ? `<span>🔍 ${t('zone.recheck')}: ${formatDate(entry.recheck_scheduled)}</span>` : ''}
+              <span>📅 ${formatWeekdays(zone.weekdays)}</span>
+              <span>🗓️ ${formatMonths(zone.months)}</span>
             </div>
-            <div class="card-actions">${startStopBtn}${toggleBtn}</div>
+            <div class="card-actions">${startStopBtn}${toggleBtn}${scheduleBtn}</div>
           </div>`;
       }
       document.getElementById('zonesContainer').innerHTML = html;
@@ -1366,7 +1806,7 @@
         setTimeout(loadData, 800);
       } catch(err) {
         if (btn) { btn.disabled = false; btn.textContent = action === 'start' ? t('btn.start') : t('btn.stop'); }
-        showToast('Fehler: ' + err.message, 'error');
+        showToast((lang === 'de' ? 'Fehler: ' : 'Error: ') + err.message, 'error');
       }
     }
 
@@ -1381,7 +1821,7 @@
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         showToast(enable ? t('toast.zone_enabled', {id: zoneId}) : t('toast.zone_disabled', {id: zoneId}), 'success');
         setTimeout(loadData, 500);
-      } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
+      } catch(err) { showToast((lang === 'de' ? 'Fehler: ' : 'Error: ') + err.message, 'error'); }
     }
 
     async function recalculate() {
@@ -1391,7 +1831,377 @@
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         showToast(t('toast.recalculate'), 'success');
         setTimeout(loadData, 3000);
-      } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
+      } catch(err) { showToast((lang === 'de' ? 'Fehler: ' : 'Error: ') + err.message, 'error'); }
+    }
+
+    // ── Backup Modal ───────────────────────────────────────────────────────────
+    let _backupDraft = null;
+    let _backupSuggestions = { weather_entities: [], switch_entities: [] };
+
+    function openBackupModal() {
+      document.getElementById('backupJsonInput').value = '';
+      document.getElementById('backupFileInput').value = '';
+      document.getElementById('backupRestoreResult').style.display = 'none';
+      document.getElementById('backupIssues').style.display = 'none';
+      document.getElementById('backupDraftEditor').style.display = 'none';
+      document.getElementById('backupDraftEditor').innerHTML = '';
+      document.getElementById('applyBackupBtn').style.display = 'none';
+      _backupDraft = null;
+      document.getElementById('backupModal').classList.add('open');
+      document.querySelectorAll('#backupModal [data-i18n]').forEach(el => {
+        el.textContent = t(el.getAttribute('data-i18n'));
+      });
+    }
+
+    function closeBackupModal() {
+      document.getElementById('backupModal').classList.remove('open');
+    }
+
+    function loadBackupFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('backupJsonInput').value = e.target.result;
+      };
+      reader.readAsText(file);
+    }
+
+    async function exportBackup() {
+      const btn = document.getElementById('exportBackupBtn');
+      btn.disabled = true;
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const url = API_BASE + '/backup/export' + (entryId ? '?entry_id=' + encodeURIComponent(entryId) : '');
+        const resp = await fetch(url, { headers: await authHeaders() });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'irrigationpro-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast(t('toast.backup_exported'), 'success');
+      } catch(err) {
+        showToast(t('toast.backup_error') + ': ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function _backupEscape(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
+    }
+
+    function renderBackupIssues(issues) {
+      const el = document.getElementById('backupIssues');
+      const errors = issues?.errors || [];
+      const warnings = issues?.warnings || [];
+      if (!errors.length && !warnings.length) {
+        el.style.display = 'none';
+        return;
+      }
+      let html = '';
+      if (errors.length) {
+        html += `<div><strong>${t('backup.errors')}:</strong><br>${errors.map(_backupEscape).join('<br>')}</div>`;
+      }
+      if (warnings.length) {
+        if (html) html += '<div style="height:8px"></div>';
+        html += `<div><strong>${t('backup.warnings')}:</strong><br>${warnings.map(_backupEscape).join('<br>')}</div>`;
+      }
+      el.style.cssText = `display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;${errors.length ? 'background:rgba(244,67,54,0.12);color:var(--danger);' : 'background:rgba(255,152,0,0.14);color:var(--warning);'}`;
+      el.innerHTML = html;
+    }
+
+    function renderBackupDraftEditor() {
+      const editor = document.getElementById('backupDraftEditor');
+      if (!_backupDraft) {
+        editor.style.display = 'none';
+        editor.innerHTML = '';
+        return;
+      }
+
+      const weatherOptions = (_backupSuggestions.weather_entities || [])
+        .map(e => `<option value="${_backupEscape(e)}" ${e === _backupDraft.weather_entity ? 'selected' : ''}>${_backupEscape(e)}</option>`)
+        .join('');
+      const switchOptions = (_backupSuggestions.switch_entities || [])
+        .map(e => `<option value="${_backupEscape(e)}">${_backupEscape(e)}</option>`)
+        .join('');
+
+      let zonesHtml = '';
+      (_backupDraft.zones || []).forEach((z, i) => {
+        zonesHtml += `
+          <div class="backup-zone-card" data-zone-index="${i}">
+            <div class="backup-zone-title">Zone ${i + 1}</div>
+            <div class="backup-grid">
+              <div class="backup-field"><label>zone_name</label><input data-field="zone_name" value="${_backupEscape(z.zone_name)}"></div>
+              <div class="backup-field"><label>zone_switch_entity</label><input list="backupSwitchEntities" data-field="zone_switch_entity" value="${_backupEscape(z.zone_switch_entity || '')}"></div>
+              <div class="backup-field"><label>zone_area</label><input data-field="zone_area" type="number" step="0.1" value="${_backupEscape(z.zone_area)}"></div>
+              <div class="backup-field"><label>zone_flow_rate</label><input data-field="zone_flow_rate" type="number" step="0.1" value="${_backupEscape(z.zone_flow_rate)}"></div>
+              <div class="backup-field"><label>zone_emitter_count</label><input data-field="zone_emitter_count" type="number" min="1" step="1" value="${_backupEscape(z.zone_emitter_count)}"></div>
+              <div class="backup-field"><label>zone_max_duration</label><input data-field="zone_max_duration" type="number" min="1" step="1" value="${_backupEscape(z.zone_max_duration)}"></div>
+              <div class="backup-field"><label>zone_rain_threshold</label><input data-field="zone_rain_threshold" type="number" step="0.1" value="${_backupEscape(z.zone_rain_threshold)}"></div>
+              <div class="backup-field"><label>zone_efficiency</label><input data-field="zone_efficiency" type="number" min="1" max="100" step="1" value="${_backupEscape(z.zone_efficiency)}"></div>
+              <div class="backup-field"><label>zone_crop_coef</label><input data-field="zone_crop_coef" type="number" step="0.01" value="${_backupEscape(z.zone_crop_coef)}"></div>
+              <div class="backup-field"><label>zone_plant_density</label><input data-field="zone_plant_density" type="number" step="0.01" value="${_backupEscape(z.zone_plant_density)}"></div>
+              <div class="backup-field"><label>zone_exposure_factor</label><input data-field="zone_exposure_factor" type="number" step="0.01" value="${_backupEscape(z.zone_exposure_factor)}"></div>
+              <div class="backup-field"><label>zone_rain_factoring</label><select data-field="zone_rain_factoring"><option value="true" ${z.zone_rain_factoring ? 'selected' : ''}>true</option><option value="false" ${!z.zone_rain_factoring ? 'selected' : ''}>false</option></select></div>
+              <div class="backup-field"><label>zone_enabled</label><select data-field="zone_enabled"><option value="true" ${z.zone_enabled ? 'selected' : ''}>true</option><option value="false" ${!z.zone_enabled ? 'selected' : ''}>false</option></select></div>
+              <div class="backup-field"><label>zone_adaptive</label><select data-field="zone_adaptive"><option value="true" ${z.zone_adaptive ? 'selected' : ''}>true</option><option value="false" ${!z.zone_adaptive ? 'selected' : ''}>false</option></select></div>
+              <div class="backup-field" style="grid-column:1/-1"><label>zone_weekdays (comma separated)</label><input data-field="zone_weekdays" value="${_backupEscape((z.zone_weekdays || []).join(', '))}"></div>
+              <div class="backup-field" style="grid-column:1/-1"><label>zone_months (comma separated)</label><input data-field="zone_months" value="${_backupEscape((z.zone_months || []).join(', '))}"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      editor.innerHTML = `
+        <div class="backup-zone-card">
+          <div class="backup-zone-title">${_backupEscape(t('backup.loaded'))}</div>
+          <div class="backup-grid">
+            <div class="backup-field"><label>weather_entity</label><input list="backupWeatherEntities" id="backup_weather_entity" value="${_backupEscape(_backupDraft.weather_entity || '')}"></div>
+            <div class="backup-field"><label>language</label><select id="backup_language"><option value="de" ${_backupDraft.language === 'de' ? 'selected' : ''}>de</option><option value="en" ${_backupDraft.language === 'en' ? 'selected' : ''}>en</option></select></div>
+            <div class="backup-field"><label>use_owm</label><select id="backup_use_owm"><option value="true" ${_backupDraft.use_owm ? 'selected' : ''}>true</option><option value="false" ${!_backupDraft.use_owm ? 'selected' : ''}>false</option></select></div>
+            <div class="backup-field"><label>owm_api_key</label><input id="backup_owm_api_key" value="${_backupEscape(_backupDraft.owm_api_key || '')}"></div>
+            <div class="backup-field"><label>sunrise_offset</label><input id="backup_sunrise_offset" type="number" step="1" value="${_backupEscape(_backupDraft.sunrise_offset)}"></div>
+            <div class="backup-field"><label>cycles</label><input id="backup_cycles" type="number" step="1" min="1" value="${_backupEscape(_backupDraft.cycles)}"></div>
+            <div class="backup-field"><label>low_threshold</label><input id="backup_low_threshold" type="number" step="1" value="${_backupEscape(_backupDraft.low_threshold)}"></div>
+            <div class="backup-field"><label>high_threshold</label><input id="backup_high_threshold" type="number" step="1" value="${_backupEscape(_backupDraft.high_threshold)}"></div>
+            <div class="backup-field"><label>recheck_time</label><input id="backup_recheck_time" type="number" step="1" min="0" value="${_backupEscape(_backupDraft.recheck_time)}"></div>
+            <div class="backup-field"><label>pushover_enabled</label><select id="backup_pushover_enabled"><option value="true" ${_backupDraft.pushover_enabled ? 'selected' : ''}>true</option><option value="false" ${!_backupDraft.pushover_enabled ? 'selected' : ''}>false</option></select></div>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <div class="backup-zone-title">${_backupEscape(t('solar.title'))}</div>
+            <div class="solar-grid">${(() => {
+              const sr = _backupDraft.solar_radiation || {};
+              let h = '';
+              for (let m = 1; m <= 12; m++) {
+                h += '<div class="solar-field"><label>' + (MONTH_NAMES[m]?.[lang] || m) + '</label><input type="number" step="0.01" min="0" max="30" id="backup_solar_' + m + '" value="' + _backupEscape(sr[String(m)] ?? sr[m] ?? 6.0) + '"></div>';
+              }
+              return h;
+            })()}</div>
+          </div>
+          <datalist id="backupWeatherEntities">${weatherOptions}</datalist>
+          <datalist id="backupSwitchEntities">${switchOptions}</datalist>
+        </div>
+        ${zonesHtml}
+      `;
+      editor.style.display = 'block';
+    }
+
+    async function prepareBackupDraft() {
+      const btn = document.getElementById('prepareBackupBtn');
+      const spanEl = btn.querySelector('span');
+      const prevLabel = spanEl ? spanEl.textContent : btn.textContent;
+      const resultEl = document.getElementById('backupRestoreResult');
+      const jsonStr = document.getElementById('backupJsonInput').value.trim();
+
+      if (!jsonStr) {
+        showToast(lang === 'de' ? 'Kein JSON eingegeben' : 'No JSON entered', 'error');
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(jsonStr);
+      } catch(e) {
+        showToast(lang === 'de' ? 'Ungültiges JSON' : 'Invalid JSON', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      if (spanEl) spanEl.textContent = t('backup.preparing');
+      resultEl.style.display = 'none';
+      document.getElementById('backupIssues').style.display = 'none';
+      document.getElementById('backupDraftEditor').style.display = 'none';
+      document.getElementById('applyBackupBtn').style.display = 'none';
+
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const resp = await fetch(API_BASE + '/backup/prepare', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ entry_id: entryId, backup: payload })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+
+        _backupDraft = data.draft;
+        _backupSuggestions = {
+          weather_entities: data.weather_entities || [],
+          switch_entities: data.switch_entities || [],
+        };
+        renderBackupIssues(data.issues || {});
+        renderBackupDraftEditor();
+        document.getElementById('applyBackupBtn').style.display = 'inline-flex';
+
+        resultEl.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:rgba(76,175,80,0.15);color:var(--success)';
+        resultEl.textContent = t('backup.loaded');
+        showToast(t('toast.backup_loaded'), 'success');
+      } catch(err) {
+        resultEl.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:rgba(244,67,54,0.12);color:var(--danger)';
+        resultEl.textContent = '❌ ' + err.message;
+        showToast(t('toast.backup_restore_error') + ': ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        if (spanEl) spanEl.textContent = prevLabel;
+      }
+    }
+
+    function collectBackupDraftFromEditor() {
+      if (!_backupDraft) return null;
+      const draft = JSON.parse(JSON.stringify(_backupDraft));
+      draft.weather_entity = document.getElementById('backup_weather_entity')?.value?.trim() || '';
+      draft.language = document.getElementById('backup_language')?.value || 'de';
+      draft.use_owm = document.getElementById('backup_use_owm')?.value === 'true';
+      draft.owm_api_key = document.getElementById('backup_owm_api_key')?.value || '';
+      draft.sunrise_offset = Number(document.getElementById('backup_sunrise_offset')?.value || 0);
+      draft.cycles = Number(document.getElementById('backup_cycles')?.value || 2);
+      draft.low_threshold = Number(document.getElementById('backup_low_threshold')?.value || 5);
+      draft.high_threshold = Number(document.getElementById('backup_high_threshold')?.value || 15);
+      draft.recheck_time = Number(document.getElementById('backup_recheck_time')?.value || 0);
+      draft.pushover_enabled = document.getElementById('backup_pushover_enabled')?.value === 'true';
+
+      // Collect solar radiation values
+      const sr = {};
+      for (let m = 1; m <= 12; m++) {
+        const el = document.getElementById('backup_solar_' + m);
+        sr[String(m)] = parseFloat(el?.value) || 6.0;
+      }
+      draft.solar_radiation = sr;
+
+      document.querySelectorAll('#backupDraftEditor .backup-zone-card[data-zone-index]').forEach(card => {
+        const idx = Number(card.getAttribute('data-zone-index'));
+        if (!Number.isInteger(idx) || !draft.zones[idx]) return;
+        const get = (field) => card.querySelector(`[data-field="${field}"]`);
+        const parseList = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+
+        draft.zones[idx].zone_name = get('zone_name')?.value?.trim() || `Zone ${idx + 1}`;
+        draft.zones[idx].zone_switch_entity = get('zone_switch_entity')?.value?.trim() || null;
+        draft.zones[idx].zone_area = Number(get('zone_area')?.value || 10);
+        draft.zones[idx].zone_flow_rate = Number(get('zone_flow_rate')?.value || 2);
+        draft.zones[idx].zone_emitter_count = Number(get('zone_emitter_count')?.value || 1);
+        draft.zones[idx].zone_max_duration = Number(get('zone_max_duration')?.value || 60);
+        draft.zones[idx].zone_rain_threshold = Number(get('zone_rain_threshold')?.value || 2.5);
+        draft.zones[idx].zone_efficiency = Number(get('zone_efficiency')?.value || 90);
+        draft.zones[idx].zone_crop_coef = Number(get('zone_crop_coef')?.value || 0.6);
+        draft.zones[idx].zone_plant_density = Number(get('zone_plant_density')?.value || 1.0);
+        draft.zones[idx].zone_exposure_factor = Number(get('zone_exposure_factor')?.value || 1.0);
+        draft.zones[idx].zone_rain_factoring = get('zone_rain_factoring')?.value === 'true';
+        draft.zones[idx].zone_enabled = get('zone_enabled')?.value === 'true';
+        draft.zones[idx].zone_adaptive = get('zone_adaptive')?.value === 'true';
+        draft.zones[idx].zone_weekdays = parseList(get('zone_weekdays')?.value).map(v => v.toLowerCase());
+        draft.zones[idx].zone_months = parseList(get('zone_months')?.value).map(v => Number(v)).filter(v => v >= 1 && v <= 12);
+      });
+
+      return draft;
+    }
+
+    async function applyBackupDraft() {
+      const btn = document.getElementById('applyBackupBtn');
+      const spanEl = btn.querySelector('span');
+      const prevLabel = spanEl ? spanEl.textContent : btn.textContent;
+      const resultEl = document.getElementById('backupRestoreResult');
+      const candidate = collectBackupDraftFromEditor();
+      if (!candidate) {
+        showToast(lang === 'de' ? 'Kein geladenes Backup vorhanden' : 'No prepared backup loaded', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      if (spanEl) spanEl.textContent = t('backup.applying');
+      resultEl.style.display = 'none';
+
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const resp = await fetch(API_BASE + '/backup/apply', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ entry_id: entryId, data: candidate })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+
+        renderBackupIssues(data.issues || {});
+        resultEl.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:rgba(76,175,80,0.15);color:var(--success)';
+        resultEl.textContent = lang === 'de'
+          ? `✅ Gespeichert: ${data.zones} Zonen`
+          : `✅ Saved: ${data.zones} zones`;
+        showToast(t('toast.backup_restored'), 'success');
+        setTimeout(() => { closeBackupModal(); loadData(); }, 1300);
+      } catch(err) {
+        resultEl.style.cssText = 'display:block;margin-top:10px;padding:10px;border-radius:8px;font-size:13px;background:rgba(244,67,54,0.12);color:var(--danger)';
+        resultEl.textContent = '❌ ' + err.message;
+        showToast(t('toast.backup_restore_error') + ': ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        if (spanEl) spanEl.textContent = prevLabel;
+      }
+    }
+
+    // ── Solar Radiation Modal ──────────────────────────────────────────────
+    function openSolarModal() {
+      const entry = _lastData?.entries?.[0];
+      const solarData = entry?.solar_radiation || {};
+      const currentMonth = entry?.current_month || new Date().getMonth() + 1;
+      const grid = document.getElementById('solarGrid');
+      let html = '';
+      for (let m = 1; m <= 12; m++) {
+        const val = solarData[String(m)] ?? 6.0;
+        const isCurrent = m === currentMonth;
+        html += `
+          <div class="solar-field${isCurrent ? ' current-month' : ''}">
+            <label>${MONTH_NAMES[m]?.[lang] || m}${isCurrent ? ' ◀' : ''}</label>
+            <input type="number" step="0.01" min="0" max="30" id="solar_m${m}" value="${val}">
+          </div>`;
+      }
+      grid.innerHTML = html;
+      document.getElementById('solarModal').classList.add('open');
+      document.querySelectorAll('#solarModal [data-i18n]').forEach(el => {
+        el.textContent = t(el.getAttribute('data-i18n'));
+      });
+    }
+
+    function closeSolarModal() {
+      document.getElementById('solarModal').classList.remove('open');
+    }
+
+    async function saveSolarValues() {
+      const btn = document.getElementById('saveSolarBtn');
+      const prevLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = t('solar.saving');
+      const values = {};
+      for (let m = 1; m <= 12; m++) {
+        const el = document.getElementById('solar_m' + m);
+        values[String(m)] = parseFloat(el?.value) || 6.0;
+      }
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const resp = await fetch(API_BASE + '/settings/solar', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ entry_id: entryId, solar_radiation: values })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+        showToast(t('toast.solar_saved'), 'success');
+        closeSolarModal();
+        await loadData();
+      } catch(err) {
+        showToast(t('toast.solar_error') + ': ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevLabel;
+      }
     }
 
     // ── Test Modal ────────────────────────────────────────────────────────────

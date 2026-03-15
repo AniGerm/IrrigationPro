@@ -154,6 +154,46 @@ Erzwingt Neuberechnung des Bewässerungsplans.
 service: irrigationpro.recalculate
 ```
 
+## Backup und Restore
+
+Die Integration bietet API-Endpunkte fuer Export/Import der kompletten Konfiguration.
+
+- `GET /api/irrigationpro/backup/export`
+  Exportiert ein natives Backup (`backup_format: irrigationpro-backup-v1`).
+- `POST /api/irrigationpro/backup/restore`
+  Stellt eine Konfiguration wieder her.
+- `GET /api/irrigationpro/zones/schedule`
+  Liefert pro Zone die aktuell gesetzten `zone_weekdays` und `zone_months`.
+- `POST /api/irrigationpro/zones/schedule`
+  Aktualisiert `zone_weekdays` und/oder `zone_months` pro Zone (eine oder mehrere).
+
+Der Restore-Endpunkt akzeptiert zwei Formate:
+
+1. Natives Backup-Format (`irrigationpro-backup-v1`)
+2. Legacy-Setup-Format aus SmartSprinklers-aehnlichen Dateien
+
+Hinweise zur Kompatibilitaet:
+
+- Beim Legacy-Import werden Monate (`Jan`..`Dec`) und Wochentage normalisiert.
+- `dripLPH` wird als Gesamt-Durchfluss interpretiert und auf `zone_flow_rate` pro Emitter umgerechnet (`dripLPH / dripNos`).
+- Wenn im Legacy-Setup keine `switch_entity` enthalten ist, bleibt die vorhandene Zuordnung erhalten (oder leer, falls keine existiert).
+
+Beispiel-Workflow:
+
+1. Backup aus laufendem System exportieren.
+2. Optional Legacy-Datei mit `tools/convert_legacy_setup_to_backup.py` in ein natives Backup konvertieren.
+3. Backup per `POST /api/irrigationpro/backup/restore` einspielen.
+
+Beispiel fuer eine gezielte Aktualisierung einer Zone:
+
+```json
+{
+  "zone_id": 1,
+  "zone_weekdays": ["monday", "wednesday", "friday"],
+  "zone_months": [4, 5, 6, 7, 8, 9]
+}
+```
+
 ## 🤖 Automationen
 
 ### Beispiel: Ventil mit Zone synchronisieren

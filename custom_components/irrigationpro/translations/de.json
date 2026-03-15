@@ -33,6 +33,8 @@
           "zone_max_duration": "Max. Dauer (Minuten)",
           "zone_rain_threshold": "Regen-Schwellwert (mm)",
           "zone_rain_factoring": "Regen berücksichtigen",
+          "zone_weekdays": "Bewässerungstage",
+          "zone_months": "Bewässerungsmonate",
           "zone_enabled": "Zone aktiviert",
           "zone_adaptive": "Adaptive Bewässerung"
         }
@@ -46,6 +48,7 @@
           "low_threshold": "Niedrige Temperatur-Schwelle (°C)",
           "high_threshold": "Hohe Temperatur-Schwelle (°C)",
           "recheck_time": "Recheck vor Start (Minuten, 0 zum Deaktivieren)",
+          "language": "Sprache für UI und Benachrichtigungen",
           "pushover_enabled": "Pushover-Benachrichtigungen aktivieren",
           "pushover_api_token": "Pushover API Token (Application Token)",
           "pushover_user_key": "Pushover User Key",

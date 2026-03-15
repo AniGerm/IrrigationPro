@@ -13,6 +13,7 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_CYCLES,
     CONF_HIGH_THRESHOLD,
+    CONF_LANGUAGE,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
     CONF_PUSHOVER_API_TOKEN,
@@ -36,11 +37,13 @@ from .const import (
     CONF_ZONE_EXPOSURE_FACTOR,
     CONF_ZONE_FLOW_RATE,
     CONF_ZONE_MAX_DURATION,
+    CONF_ZONE_MONTHS,
     CONF_ZONE_NAME,
     CONF_ZONE_PLANT_DENSITY,
     CONF_ZONE_RAIN_FACTORING,
     CONF_ZONE_RAIN_THRESHOLD,
     CONF_ZONE_SWITCH_ENTITY,
+    CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_CYCLES,
     DEFAULT_HIGH_THRESHOLD,
@@ -49,6 +52,7 @@ from .const import (
     DEFAULT_PUSHOVER_PRIORITY,
     DEFAULT_DAILY_REPORT_ENABLED,
     DEFAULT_DAILY_REPORT_HOUR,
+    DEFAULT_LANGUAGE,
     DEFAULT_RECHECK_TIME,
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_SUNRISE_OFFSET,
@@ -65,6 +69,7 @@ from .const import (
     DEFAULT_ZONE_RAIN_FACTORING,
     DEFAULT_ZONE_RAIN_THRESHOLD,
     DOMAIN,
+    MONTHS,
     WEEKDAYS,
 )
 
@@ -307,6 +312,45 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow):
                     CONF_ZONE_RAIN_FACTORING, default=DEFAULT_ZONE_RAIN_FACTORING
                 ): selector.BooleanSelector(),
                 vol.Required(
+                    CONF_ZONE_WEEKDAYS, default=WEEKDAYS
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="monday", label="Monday"),
+                            selector.SelectOptionDict(value="tuesday", label="Tuesday"),
+                            selector.SelectOptionDict(value="wednesday", label="Wednesday"),
+                            selector.SelectOptionDict(value="thursday", label="Thursday"),
+                            selector.SelectOptionDict(value="friday", label="Friday"),
+                            selector.SelectOptionDict(value="saturday", label="Saturday"),
+                            selector.SelectOptionDict(value="sunday", label="Sunday"),
+                        ],
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    CONF_ZONE_MONTHS, default=list(range(1, 13))
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=1, label=MONTHS[0].capitalize()),
+                            selector.SelectOptionDict(value=2, label=MONTHS[1].capitalize()),
+                            selector.SelectOptionDict(value=3, label=MONTHS[2].capitalize()),
+                            selector.SelectOptionDict(value=4, label=MONTHS[3].capitalize()),
+                            selector.SelectOptionDict(value=5, label=MONTHS[4].capitalize()),
+                            selector.SelectOptionDict(value=6, label=MONTHS[5].capitalize()),
+                            selector.SelectOptionDict(value=7, label=MONTHS[6].capitalize()),
+                            selector.SelectOptionDict(value=8, label=MONTHS[7].capitalize()),
+                            selector.SelectOptionDict(value=9, label=MONTHS[8].capitalize()),
+                            selector.SelectOptionDict(value=10, label=MONTHS[9].capitalize()),
+                            selector.SelectOptionDict(value=11, label=MONTHS[10].capitalize()),
+                            selector.SelectOptionDict(value=12, label=MONTHS[11].capitalize()),
+                        ],
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
                     CONF_ZONE_ENABLED, default=DEFAULT_ZONE_ENABLED
                 ): selector.BooleanSelector(),
                 vol.Required(
@@ -407,6 +451,17 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow):
                         max=120,
                         unit_of_measurement="min",
                         mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_LANGUAGE, default=DEFAULT_LANGUAGE
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="de", label="Deutsch"),
+                            selector.SelectOptionDict(value="en", label="English"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
                 vol.Optional(
@@ -537,6 +592,18 @@ class SmartIrrigationOptionsFlow(config_entries.OptionsFlow):
                         max=120,
                         unit_of_measurement="min",
                         mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_LANGUAGE,
+                    default=current_config.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="de", label="Deutsch"),
+                            selector.SelectOptionDict(value="en", label="English"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
                 vol.Optional(
