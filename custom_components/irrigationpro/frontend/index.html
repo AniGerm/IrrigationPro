@@ -1025,6 +1025,55 @@
       }
     }
 
+    const WEEKDAY_NAMES = {
+      monday: { de: 'Montag', en: 'Monday' },
+      tuesday: { de: 'Dienstag', en: 'Tuesday' },
+      wednesday: { de: 'Mittwoch', en: 'Wednesday' },
+      thursday: { de: 'Donnerstag', en: 'Thursday' },
+      friday: { de: 'Freitag', en: 'Friday' },
+      saturday: { de: 'Samstag', en: 'Saturday' },
+      sunday: { de: 'Sonntag', en: 'Sunday' }
+    };
+
+    function translateBackendReason(reason) {
+      if (!reason) return reason;
+
+      const normalizeWeekday = (value) => {
+        const key = String(value || '').trim().toLowerCase();
+        return WEEKDAY_NAMES[key]?.[lang] || value;
+      };
+
+      if (lang === 'de') {
+        return String(reason).replace(
+          /\((monday|tuesday|wednesday|thursday|friday|saturday|sunday)\)/gi,
+          (_, day) => `(${normalizeWeekday(day)})`
+        );
+      }
+
+      let text = String(reason);
+
+      text = text.replace(
+        /Temperatur zu niedrig \(min: ([\d.]+)°C, max: ([\d.]+)°C – Schwelle: ([\d.]+)\/([\d.]+)°C\)/,
+        'Temperature too low (min: $1°C, max: $2°C - threshold: $3/$4°C)'
+      );
+      text = text.replace(
+        /Regenschwelle überschritten \(([\d.]+) mm >= ([\d.]+) mm\)/,
+        'Rain threshold exceeded ($1 mm >= $2 mm)'
+      );
+      text = text.replace(/Zone deaktiviert/g, 'Zone disabled');
+      text = text.replace(/Kein Bewässerungsmonat/g, 'Not a watering month');
+      text = text.replace(/Kein Bewässerungsbedarf/g, 'No watering needed');
+      text = text.replace(/Bewässerungsbedarf/g, 'Watering needed');
+      text = text.replace(/Regen gedeckt/g, 'Covered by rain');
+      text = text.replace(
+        /Kein Bewässerungstag \((monday|tuesday|wednesday|thursday|friday|saturday|sunday)\)/gi,
+        (_, day) => `Not a watering day (${normalizeWeekday(day)})`
+      );
+      text = text.replace(/übersprungen/g, 'skipped');
+      text = text.replace(/Kein Bedarf/g, 'No demand');
+      return text;
+    }
+
     // ── Auth-Error Banner ────────────────────────────────────────────────────
     function showAuthBanner() {
       if (document.getElementById('authBanner')) return;
@@ -1209,7 +1258,7 @@
         document.getElementById('statusBar').after(srEl);
       }
       if (!entry.scheduled_run && entry.schedule_reason) {
-        srEl.textContent = 'ℹ️ ' + entry.schedule_reason;
+        srEl.textContent = 'ℹ️ ' + translateBackendReason(entry.schedule_reason);
         srEl.style.display = 'block';
       } else {
         srEl.style.display = 'none';
@@ -1227,8 +1276,9 @@
         const entityDot = zone.entity_state === 'on' ? 'on' : zone.entity_state === 'off' ? 'off' : 'unknown';
         const entityLabel = zone.switch_entity || t('entity.not_configured');
         const entityStateText = zone.entity_state === 'on' ? t('entity.on') : zone.entity_state === 'off' ? t('entity.off') : zone.entity_state || '?';
+        const translatedSkipReason = translateBackendReason(zone.skip_reason);
         const skipReasonHtml = (!zone.is_running && zone.skip_reason)
-          ? `<div style="font-size:12px;color:var(--text-secondary);background:rgba(255,152,0,0.1);border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ ${zone.skip_reason}</div>`
+          ? `<div style="font-size:12px;color:var(--text-secondary);background:rgba(255,152,0,0.1);border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ ${translatedSkipReason}</div>`
           : '';
         const toggleBtn = zone.enabled
           ? `<button class="btn btn-sm" style="background:rgba(244,67,54,0.15);color:var(--danger)" onclick="toggleZoneEnabled(${zone.zone_id}, false)">${t('btn.disable')}</button>`
@@ -1420,7 +1470,7 @@
             html += `<div style="margin-bottom:8px"><strong>${t('test.would_start')}</strong> <span style="color:var(--success)">${formatDate(result.scheduled_would_be)}</span></div>`;
           } else {
             html += `<div style="margin-bottom:8px;color:var(--text-secondary)">${t('test.no_schedule')}</div>`;
-            if (result.schedule_reason) html += `<div style="font-size:12px;margin-bottom:8px">${result.schedule_reason}</div>`;
+            if (result.schedule_reason) html += `<div style="font-size:12px;margin-bottom:8px">${translateBackendReason(result.schedule_reason)}</div>`;
           }
           html += `<div style="margin-bottom:8px"><strong>${t('test.total')}</strong> ${result.total_duration_minutes} min &nbsp;|&nbsp; <strong>${t('test.cycles')}</strong> ${result.cycles}</div>`;
           html += '<hr style="border-color:var(--border);margin:10px 0">';
@@ -1429,7 +1479,7 @@
             html += `<div class="result-zone">
               <span>💧 ${z.name}</span>
               <span>${hasSkip
-                ? '<em class="result-skip">' + t('test.skipped') + ': ' + z.skip_reason + '</em>'
+                ? '<em class="result-skip">' + t('test.skipped') + ': ' + translateBackendReason(z.skip_reason) + '</em>'
                 : '<strong>' + z.duration + ' ' + t('test.min') + '</strong>'
               }</span>
             </div>`;
@@ -1577,8 +1627,8 @@
         let titleParts = [];
         for (const ev of dayEvents) {
           if (ev.type === 'zone_run') titleParts.push(`💧 ${ev.zone_name}: ${ev.duration_actual || ev.duration_planned}min`);
-          else if (ev.type === 'skip') titleParts.push(`⏭ ${ev.reason || 'übersprungen'}`);
-          else if (ev.type === 'no_water') titleParts.push(`✅ ${ev.reason || 'Kein Bedarf'}`);
+          else if (ev.type === 'skip') titleParts.push(`⏭ ${translateBackendReason(ev.reason || (lang === 'de' ? 'übersprungen' : 'skipped'))}`);
+          else if (ev.type === 'no_water') titleParts.push(`✅ ${translateBackendReason(ev.reason || (lang === 'de' ? 'Kein Bedarf' : 'No demand'))}`);
         }
         const titleAttr = titleParts.length ? ` title="${titleParts.join('\n').replace(/"/g,'&quot;')}"` : '';
         const todayCls = isToday ? ' hcal-today' : '';
@@ -1650,7 +1700,7 @@
               <strong>${t('hist.skipped')}</strong>
               <span class="hist-date">${dateLabel}</span>
             </div>
-            <div class="hist-reason">⚠️ ${entry.reason}</div>
+            <div class="hist-reason">⚠️ ${translateBackendReason(entry.reason)}</div>
             <div class="hist-meta" style="margin-top:6px">
               <span>💧 ETo: ${entry.eto} mm</span>
               <span>🌧 ${t('hist.rain')}: ${entry.rain} mm</span>
@@ -1668,7 +1718,7 @@
               <span>🌧 ${t('hist.rain')}: ${entry.rain} mm</span>
               <span>🌡 ${t('hist.temp')}: ${entry.min_temp}–${entry.max_temp}°C</span>
             </div>
-            ${entry.reason ? `<div class="hist-reason" style="color:var(--text-secondary)">ℹ️ ${entry.reason}</div>` : ''}
+            ${entry.reason ? `<div class="hist-reason" style="color:var(--text-secondary)">ℹ️ ${translateBackendReason(entry.reason)}</div>` : ''}
           </div>`;
         }
       }
