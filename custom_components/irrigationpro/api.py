@@ -92,6 +92,26 @@ class IrrigationProApiView(HomeAssistantView):
                     }
                 )
 
+            last_update = (
+                getattr(coordinator, "last_refresh_time", None)
+                or getattr(coordinator, "last_calculated", None)
+                or (
+                    coordinator.last_update_success_time
+                    if hasattr(coordinator, "last_update_success_time")
+                    else None
+                )
+                or (
+                    coordinator.last_updated
+                    if hasattr(coordinator, "last_updated")
+                    else None
+                )
+            )
+            next_automatic_calculation = (
+                last_update + coordinator.update_interval
+                if last_update and getattr(coordinator, "update_interval", None)
+                else None
+            )
+
             entry_data = {
                 "entry_id": entry_id,
                 "zones": zones_data,
@@ -113,19 +133,13 @@ class IrrigationProApiView(HomeAssistantView):
                     else None
                 ),
                 "last_update": (
-                    coordinator.last_update_success_time.isoformat()
-                    if hasattr(coordinator, "last_update_success_time") and coordinator.last_update_success_time
-                    else coordinator.last_updated.isoformat()
-                    if hasattr(coordinator, "last_updated") and coordinator.last_updated
+                    last_update.isoformat()
+                    if last_update
                     else None
                 ),
                 "next_automatic_calculation": (
-                    (
-                        coordinator.last_update_success_time + coordinator.update_interval
-                    ).isoformat()
-                    if hasattr(coordinator, "last_update_success_time")
-                    and coordinator.last_update_success_time
-                    and getattr(coordinator, "update_interval", None)
+                    next_automatic_calculation.isoformat()
+                    if next_automatic_calculation
                     else None
                 ),
             }

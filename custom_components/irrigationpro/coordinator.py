@@ -155,6 +155,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self.schedule_reason: str = ""  # Why no watering is scheduled
         self.history: list[dict] = []  # Irrigation & skip history (max 180 entries)
         self.last_calculated: datetime | None = None  # When the schedule was last calculated
+        self.last_refresh_time: datetime | None = None  # Last successful coordinator refresh
         self._daily_report_unsub = None
         self._watering_started_at: datetime | None = None
         
@@ -268,6 +269,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             
             # Recalculate zone requirements
             await self._async_calculate_schedule()
+            self.last_refresh_time = dt_util.now()
             
             return {
                 "forecast": self.forecast,
