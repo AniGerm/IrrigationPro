@@ -119,6 +119,15 @@ class IrrigationProApiView(HomeAssistantView):
                     if hasattr(coordinator, "last_updated") and coordinator.last_updated
                     else None
                 ),
+                "next_automatic_calculation": (
+                    (
+                        coordinator.last_update_success_time + coordinator.update_interval
+                    ).isoformat()
+                    if hasattr(coordinator, "last_update_success_time")
+                    and coordinator.last_update_success_time
+                    and getattr(coordinator, "update_interval", None)
+                    else None
+                ),
             }
             result["entries"].append(entry_data)
 

@@ -286,6 +286,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             return
         
         _LOGGER.info("Calculating irrigation schedule")
+        self.last_calculated = dt_util.now()
         
         # Get configuration
         sunrise_offset = self.entry.data.get(CONF_SUNRISE_OFFSET, 0)
@@ -328,6 +329,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 f"max: {forecast_day.max_temp:.1f}°C – Schwelle: {low_threshold}/{high_threshold}°C)"
             )
             self._log_skip_event(self.schedule_reason, forecast_day)
+            self.recheck_scheduled = None
             return
         
         # Recalculate durations for the selected day
@@ -343,9 +345,6 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     cycles,
                     zone.duration,
                 )
-        
-        # Track when calculation happened for cases with no watering
-        self.last_calculated = dt_util.now()
         
         # Calculate start and end times
         sunrise = self.forecast[day_index].sunrise
@@ -370,6 +369,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             if recheck_time > dt_util.now():
                 self.recheck_scheduled = recheck_time
                 _LOGGER.info("Recheck scheduled for %s", recheck_time.strftime("%Y-%m-%d %H:%M"))
+                return
+
+        self.recheck_scheduled = None
 
     async def _calculate_zone_duration(
         self, zone: ZoneData, day_index: int

@@ -632,6 +632,7 @@
         'zone.last_run': 'Letzter Lauf',
         'zone.next_sched': 'Nächste Bewässerung',
         'zone.last_calc': 'Letzte Berechnung',
+        'zone.next_auto_calc': 'Nächste automatische Berechnung',
         'zone.recheck': 'Nächster Recheck',
         'btn.stop': '⏹ Stopp',
         'btn.start': '▶ Start',
@@ -728,6 +729,7 @@
         'zone.last_run': 'Last Run',
         'zone.next_sched': 'Next Watering',
         'zone.last_calc': 'Last Calculation',
+        'zone.next_auto_calc': 'Next Automatic Calculation',
         'zone.recheck': 'Next Recheck',
         'btn.stop': '⏹ Stop',
         'btn.start': '▶ Start',
@@ -1171,6 +1173,7 @@
             </div>
             <div class="schedule-info">
               <span>🔄 ${t('zone.last_calc')}: ${entry.last_calculated ? formatDate(entry.last_calculated) : '--'}</span>
+              <span>⏱️ ${t('zone.next_auto_calc')}: ${entry.next_automatic_calculation ? formatDate(entry.next_automatic_calculation) : '--'}</span>
               ${entry.recheck_scheduled ? `<span>🔍 ${t('zone.recheck')}: ${formatDate(entry.recheck_scheduled)}</span>` : ''}
             </div>
             <div class="card-actions">${startStopBtn}${toggleBtn}</div>
