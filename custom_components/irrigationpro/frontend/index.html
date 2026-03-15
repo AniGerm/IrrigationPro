@@ -416,6 +416,26 @@
       margin-bottom: 10px;
       flex-wrap: wrap;
     }
+    .hcal-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .hcal-nav-btn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text-primary);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .hcal-nav-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
     .hcal-title {
       font-size: 13px;
       font-weight: 700;
@@ -467,6 +487,7 @@
     }
     .hcal-day.hcal-empty { visibility: hidden; }
     .hcal-day.hcal-none  { background: rgba(0,0,0,0.04); color: var(--text-secondary); }
+    .hcal-day.hcal-outside-month { opacity: 0.45; }
     .hcal-day.hcal-run   { background: rgba(33,150,243,0.18); color: var(--primary); font-weight: 700; cursor: pointer; }
     .hcal-day.hcal-run:hover { background: rgba(33,150,243,0.32); }
     .hcal-day.hcal-skip  { background: rgba(255,152,0,0.15); color: var(--warning); cursor: pointer; }
@@ -753,6 +774,8 @@
         'no_scheduled': 'Nicht geplant',
         'hist.title': '🗓️ Bewässerungs-Historie',
         'hist.calendar_range': 'Kalenderübersicht',
+        'hist.prev_month': '← Vorheriger Monat',
+        'hist.next_month': 'Nächster Monat →',
         'hist.empty': 'Noch keine Bewässerungshistorie vorhanden. Starte eine Zone, damit sie hier erscheint.',
         'hist.legend_run': '💧 Bewässert',
         'hist.legend_skip': '⏭ Übersprungen',
@@ -851,6 +874,8 @@
         'no_scheduled': 'Not scheduled',
         'hist.title': '🗓️ Irrigation History',
         'hist.calendar_range': 'Calendar Overview',
+        'hist.prev_month': '← Previous Month',
+        'hist.next_month': 'Next Month →',
         'hist.empty': 'No irrigation history yet. Start a zone and it will appear here.',
         'hist.legend_run': '💧 Irrigated',
         'hist.legend_skip': '⏭ Skipped',
@@ -896,6 +921,8 @@
     }
 
     let _lastData = null;
+    let _historyEntries = [];
+    let _historyMonthCursor = null;
     let refreshTimer = null;
     let _countdownInterval = null;
     const API_BASE = '/api/irrigationpro';
@@ -1416,6 +1443,10 @@
 
     // ── History Modal ─────────────────────────────────────────────────────────
     function openHistoryModal() {
+      if (!_historyMonthCursor) {
+        const now = new Date();
+        _historyMonthCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
       document.getElementById('historyModal').classList.add('open');
       loadHistory();
     }
@@ -1432,10 +1463,28 @@
         if (resp.status === 401) { resetAuth(); showAuthBanner(); closeHistoryModal(); return; }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
-        renderHistory(data.history || []);
+        _historyEntries = data.history || [];
+        if (!_historyMonthCursor) {
+          const now = new Date();
+          _historyMonthCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
+        renderHistory(_historyEntries);
       } catch(err) {
         container.innerHTML = '<span style="color:var(--danger)">Fehler: ' + err.message + '</span>';
       }
+    }
+
+    function changeHistoryMonth(delta) {
+      if (!_historyMonthCursor) {
+        const now = new Date();
+        _historyMonthCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+      _historyMonthCursor = new Date(
+        _historyMonthCursor.getFullYear(),
+        _historyMonthCursor.getMonth() + delta,
+        1
+      );
+      renderHistory(_historyEntries);
     }
 
     function renderHistory(entries) {
@@ -1452,14 +1501,19 @@
         byDate[e.date].push(e);
       }
 
-      // ── Calendar (last 42 days, Mon-aligned) ──────────────────────────────
+      // ── Calendar (navigable monthly view, Mon-aligned) ───────────────────
       const todayD = new Date(); todayD.setHours(0,0,0,0);
-      // Find start: go back 41 days then align to Monday
-      const calEnd = new Date(todayD);
-      const calStartRaw = new Date(todayD);
-      calStartRaw.setDate(calStartRaw.getDate() - 41);
-      const dow0 = (calStartRaw.getDay() + 6) % 7; // 0=Mon
-      calStartRaw.setDate(calStartRaw.getDate() - dow0);
+      if (!_historyMonthCursor) {
+        _historyMonthCursor = new Date(todayD.getFullYear(), todayD.getMonth(), 1);
+      }
+      const monthStart = new Date(_historyMonthCursor.getFullYear(), _historyMonthCursor.getMonth(), 1);
+      const monthEnd = new Date(_historyMonthCursor.getFullYear(), _historyMonthCursor.getMonth() + 1, 0);
+      const calStartRaw = new Date(monthStart);
+      const startDow = (calStartRaw.getDay() + 6) % 7;
+      calStartRaw.setDate(calStartRaw.getDate() - startDow);
+      const calEnd = new Date(monthEnd);
+      const endDow = (calEnd.getDay() + 6) % 7;
+      calEnd.setDate(calEnd.getDate() + (6 - endDow));
 
       const weekDayLabels = lang === 'de'
         ? ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
@@ -1471,21 +1525,22 @@
       const shortMonthFmt = new Intl.DateTimeFormat(lang === 'de' ? 'de-DE' : 'en-GB', {
         month: 'short'
       });
-      const visibleMonths = [];
-      const visibleMonthKeys = new Set();
-      const monthScan = new Date(calStartRaw);
-      while (monthScan <= calEnd) {
-        const key = `${monthScan.getFullYear()}-${monthScan.getMonth()}`;
-        if (!visibleMonthKeys.has(key)) {
-          visibleMonthKeys.add(key);
-          visibleMonths.push(monthLabelFmt.format(monthScan));
-        }
-        monthScan.setMonth(monthScan.getMonth() + 1, 1);
-      }
+      const currentMonthLabel = monthLabelFmt.format(monthStart);
+      const entryDates = Object.keys(byDate).filter(Boolean).sort();
+      const oldestEntry = entryDates.length ? new Date(entryDates[entryDates.length - 1] + 'T12:00:00') : monthStart;
+      const newestEntry = entryDates.length ? new Date(entryDates[0] + 'T12:00:00') : todayD;
+      const minMonth = new Date(oldestEntry.getFullYear(), oldestEntry.getMonth(), 1);
+      const maxMonth = new Date(todayD.getFullYear(), todayD.getMonth(), 1);
+      const canGoPrev = monthStart > minMonth;
+      const canGoNext = monthStart < maxMonth;
 
       let calHtml = `<div class="hcal-toolbar">
         <div class="hcal-title">🗓️ ${t('hist.calendar_range')}</div>
-        <div class="hcal-months">${visibleMonths.map(m => `<span class="hcal-month-chip">${m}</span>`).join('')}</div>
+        <div class="hcal-nav">
+          <button class="hcal-nav-btn" onclick="changeHistoryMonth(-1)" ${canGoPrev ? '' : 'disabled'}>${t('hist.prev_month')}</button>
+          <span class="hcal-month-chip">${currentMonthLabel}</span>
+          <button class="hcal-nav-btn" onclick="changeHistoryMonth(1)" ${canGoNext ? '' : 'disabled'}>${t('hist.next_month')}</button>
+        </div>
       </div><div class="hcal">`;
       // Header row
       for (const d of weekDayLabels) calHtml += `<div class="hcal-hdr">${d}</div>`;
@@ -1528,11 +1583,12 @@
         const titleAttr = titleParts.length ? ` title="${titleParts.join('\n').replace(/"/g,'&quot;')}"` : '';
         const todayCls = isToday ? ' hcal-today' : '';
         const dayNum = cur.getDate();
+        const isOutsideMonth = cur.getMonth() !== monthStart.getMonth();
         const monthTag = dayNum === 1 ? `<span class="hcal-month-tag">${shortMonthFmt.format(cur)}</span>` : '';
         const clickable = !isFuture && dayEvents.length > 0;
         const dataAttr = clickable ? ` data-date="${iso}"` : '';
 
-        calHtml += `<div class="hcal-day ${cls}${todayCls}"${titleAttr}${dataAttr}>
+        calHtml += `<div class="hcal-day ${cls}${todayCls}${isOutsideMonth ? ' hcal-outside-month' : ''}"${titleAttr}${dataAttr}>
           ${monthTag}
           <span style="font-size:10px">${dayNum}</span>
           ${dot ? `<span class="hcal-dot">${dot}</span>` : ''}
