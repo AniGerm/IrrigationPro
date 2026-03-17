@@ -332,11 +332,27 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         try:
             _LOGGER.debug("Updating weather data and calculating irrigation needs")
             
-            # Get weather forecast
-            self.forecast = await self.weather_provider.async_get_forecast(days=8)
-            
+            # Get weather forecast – a missing/unavailable entity must not block startup
+            try:
+                self.forecast = await self.weather_provider.async_get_forecast(days=8)
+            except (ValueError, Exception) as weather_err:
+                _LOGGER.warning(
+                    "Weather data not available (%s) – integration will start without "
+                    "forecast. Check that the weather entity is configured correctly.",
+                    weather_err,
+                )
+                self.forecast = []
+
             if not self.forecast:
-                raise UpdateFailed("No forecast data available")
+                _LOGGER.warning(
+                    "No forecast data available – skipping ETo calculation. "
+                    "Watering will not be scheduled until weather data is available."
+                )
+                return {
+                    "forecast": [],
+                    "zones": self.zones,
+                    "scheduled_run": self.scheduled_run,
+                }
             
             # Calculate ETo for each forecast day
             lat = self.hass.config.latitude
