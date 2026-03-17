@@ -17,6 +17,7 @@ from .api import async_register_api
 from .const import (
     ATTR_DURATION,
     ATTR_ZONE_ID,
+    CONF_ZONES,
     DOMAIN,
     SERVICE_RECALCULATE,
     SERVICE_START_ZONE,
@@ -120,9 +121,37 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
+    """Apply config-entry updates.
+
+    Use a soft in-place update for normal value changes so the panel does not
+    disappear. Fall back to a hard reload when zone structure changed.
+    """
+    coordinator: SmartIrrigationCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is None:
+        await async_setup_entry(hass, entry)
+        return
+
+    old_zone_count = len(coordinator.entry.data.get(CONF_ZONES, []))
+    new_zone_count = len(entry.data.get(CONF_ZONES, []))
+    needs_hard_reload = old_zone_count != new_zone_count
+
+    if needs_hard_reload:
+        _LOGGER.info(
+            "Config structure changed (zones %s -> %s), performing hard reload",
+            old_zone_count,
+            new_zone_count,
+        )
+        await async_unload_entry(hass, entry)
+        await async_setup_entry(hass, entry)
+        return
+
+    try:
+        await coordinator.async_apply_updated_entry(entry)
+        _LOGGER.debug("Applied config-entry update in-place for %s", entry.entry_id)
+    except Exception as err:
+        _LOGGER.error("Soft reload failed (%s), falling back to hard reload", err, exc_info=True)
+        await async_unload_entry(hass, entry)
+        await async_setup_entry(hass, entry)
 
 
 async def async_setup_services(

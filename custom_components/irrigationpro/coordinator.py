@@ -330,6 +330,32 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         # Calculate initial schedule
         await self._async_calculate_schedule()
 
+    async def async_apply_updated_entry(self, entry: ConfigEntry) -> None:
+        """Apply updated config-entry data without unloading the integration.
+
+        This keeps the dashboard panel alive when values are changed from the UI.
+        """
+        old_last_run = {z.zone_id: z.last_run for z in self.zones}
+
+        self.entry = entry
+
+        # Keep the weather provider in sync with changed entry values.
+        self.weather_provider.weather_entity = entry.data.get(CONF_WEATHER_ENTITY)
+        self.weather_provider.owm_api_key = entry.data.get(CONF_OWM_API_KEY)
+        self.weather_provider.use_owm = entry.data.get(CONF_USE_OWM, False)
+
+        # Rebuild zone configs from entry and preserve runtime timestamps.
+        self._init_zones()
+        for zone in self.zones:
+            zone.last_run = old_last_run.get(zone.zone_id)
+
+        # Re-register daily report timer if related settings changed.
+        self._setup_daily_report()
+
+        # Trigger recalculation/refresh with the new settings.
+        await self.async_request_refresh()
+        self.async_set_updated_data(self.data)
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from weather provider and calculate irrigation needs."""
         try:
