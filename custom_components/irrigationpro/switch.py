@@ -42,6 +42,16 @@ class IrrigationZoneSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = f"{DOMAIN}_{coordinator.entry.entry_id}_zone_{zone.zone_id}_switch"
 
     @property
+    def device_info(self):
+        """Group all IrrigationPro entities into one device."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.entry.entry_id)},
+            "name": "IrrigationPro",
+            "manufacturer": "IrrigationPro",
+            "model": "Smart Irrigation Controller",
+        }
+
+    @property
     def is_on(self) -> bool:
         """Return true if the zone is running."""
         return self.zone.is_running

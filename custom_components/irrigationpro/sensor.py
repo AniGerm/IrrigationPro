@@ -48,6 +48,16 @@ class IrrigationSensorBase(CoordinatorEntity, SensorEntity):
         self.zone = zone
 
     @property
+    def device_info(self):
+        """Group all IrrigationPro entities into one device."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.entry.entry_id)},
+            "name": "IrrigationPro",
+            "manufacturer": "IrrigationPro",
+            "model": "Smart Irrigation Controller",
+        }
+
+    @property
     def available(self) -> bool:
         """Return if entity is available."""
         return self.coordinator.last_update_success
