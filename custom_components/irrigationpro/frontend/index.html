@@ -1607,7 +1607,6 @@
       const switchEntityOptions = switchEntities
         .map(e => `<option value="${_backupEscape(e)}"></option>`)
         .join('');
-      grid.innerHTML = `
       const _i = key => `<span class="field-info-btn" onclick="toggleFieldTip(this,event)">i</span><span class="field-tooltip">${t(key)}</span>`;
       grid.innerHTML = `
         <div class="backup-field"><label>zone_name ${_i('tip.zone_name')}</label><input id="tweak_zone_name" value="${_backupEscape(zone.name || '')}"></div>
