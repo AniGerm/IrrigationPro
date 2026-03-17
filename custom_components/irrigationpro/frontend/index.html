@@ -567,6 +567,27 @@
       color: var(--text-secondary);
       font-size: 11px;
     }
+    .field-info-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--primary, #2196f3); color: #fff !important;
+      font-size: 9px; font-weight: 700; font-style: italic;
+      cursor: pointer; flex-shrink: 0; margin-left: auto;
+      user-select: none; text-transform: lowercase !important; letter-spacing: 0 !important;
+    }
+    .field-tooltip {
+      display: none; flex: 0 0 100%;
+      padding: 6px 10px; margin-top: 2px;
+      background: rgba(33,150,243,0.07);
+      border-left: 3px solid var(--primary, #2196f3);
+      border-radius: 0 6px 6px 0;
+      font-size: 11px; line-height: 1.55;
+      color: var(--text) !important; white-space: pre-line;
+      text-transform: none !important; letter-spacing: 0 !important; font-weight: 400;
+      animation: tipFadeIn .15s ease;
+    }
+    .backup-field.tip-open .field-tooltip { display: block; }
+    @keyframes tipFadeIn { from { opacity: 0; } to { opacity: 1; } }
     .tweak-entity-field {
       grid-column: 1 / -1;
     }
@@ -668,6 +689,7 @@
       color: var(--text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.4px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
     }
     .backup-field input,
     .backup-field select,
@@ -1046,6 +1068,20 @@
         'toast.schedule_error': 'Fehler beim Speichern des Plans',
         'tweak.title': 'Zone-Feinabstimmung',
         'tweak.desc': 'Passe die Berechnungsparameter pro Zone an und speichere direkt.',
+        'tip.zone_name': 'Name der Zone in der Übersicht.\nWähle einen sprechenden Namen wie "Wiese" oder "Gemüsebeet".',
+        'tip.zone_switch_entity': 'HA-Schalter-Entität für das Magnetventil dieser Zone.\nBeispiel: switch.ventil_wiese\nIn das Feld tippen für Vorschläge aus HA.',
+        'tip.zone_adjustment_percent': 'Manueller Korrekturfaktor für den berechneten Wasserbedarf.\n100% = Standard (unverändert)\n↑ Mehr Wasser: 110–130 % – durstige Pflanzen, Hitzephasen\n↓ Weniger Wasser: 70–90 % – Schatten, robuste Pflanzen',
+        'tip.zone_efficiency': 'Wirkungsgrad des Bewässerungssystems in %.\nTropfer (Drip):   85–95 %\nMikro-Spray:      75–85 %\nRegner/Sprenger:  65–80 %\nHandgießen:       50–70 %\nNiedrigerer Wert → mehr Wasser für gleichen Effekt eingeplant.',
+        'tip.zone_crop_coef': 'Pflanzkoeffizient Kc nach FAO-56.\nWie viel Wasser die Pflanze im Verhältnis zur Referenz-ETo benötigt.\n\n🌿 Rasen / Wiese:      0,8–1,0\n🥬 Gemüse:             0,7–1,2\n🌸 Ziersträucher:      0,5–0,7\n🌳 Obstbäume:          0,6–0,9\n🌿 Hecke / Buchsbaum:  0,5–0,8\n🌵 Sukkulenten:        0,2–0,4',
+        'tip.zone_plant_density': 'Bedeckungsgrad der Fläche durch Pflanzen.\n1,0 = vollständig bedeckt\n0,5 = lückig (50 % Boden sichtbar)\n1,2–1,5 = sehr dicht / überlappend\n\n🌿 Dichter Rasen:     1,0\n🥬 Gemüsebeet:        0,8–1,1\n🌸 Junge Sträucher:   0,5–0,7\n🌳 Strauchbeet:       0,6–1,0',
+        'tip.zone_exposure_factor': 'Lagefaktor für Sonnen- und Windexposition.\n\n☀️🌬 Vollsonne + Wind:      1,2–1,4\n☀️  Vollsonne, windstill:   1,0–1,1\n🌤  Halbschatten:           0,8–0,9\n🌳  Vollschatten:           0,6–0,7',
+        'tip.zone_area': 'Bewässerte Fläche in m².\nGrundlage für die Berechnung des absoluten Wasserbedarfs in Liter.\nFormel: ETo × Kc × Dichte × Exposition × Fläche = benötigte Liter',
+        'tip.zone_flow_rate': 'Durchfluss pro einzelnem Emitter in Liter/Stunde.\nSteht auf dem Emitter oder im Datenblatt.\n\n💧 Tropfer:      1–4 L/h\n🌿 Micro-Spray:  30–80 L/h\n🌧 Sprenger:    100–300 L/h\n\nGesamtfluss = Durchfluss × Anzahl Emitter',
+        'tip.zone_emitter_count': 'Anzahl Emitter (Tropfer / Sprenger) in dieser Zone.\nGesamtfluss = Durchfluss [L/h] × Anzahl\n\nBeispiel: 4 Sprenger × 210 L/h = 840 L/h Gesamtfluss',
+        'tip.zone_rain_threshold': 'Regenschwelle in mm.\nÜberschreitet der akkumulierte Regen diesen Wert, wird die Zone übersprungen.\n\n💡 Empfehlung:\n  2–4 mm: Rasen, Gemüse\n  4–6 mm: Ziersträucher\n  6–10 mm: Hecken, robuste Gehölze',
+        'tip.zone_max_duration': 'Max. Laufdauer pro Zyklus in Minuten.\nIrrigationPro teilt die Gesamtdauer auf mehrere Zyklen auf (Cycle & Soak) –\ndamit Wasser zwischendurch einziehen kann.\n\n💡 Empfehlung:\n  10–20 min: Steile Lagen / Ton-Boden\n  20–30 min: Normaler Rasen\n  30–60 min: Tropfer, langsam versickernder Boden',
+        'tip.zone_rain_factoring': 'Wenn aktiv: akkumulierter Regen wird vom berechneten Wasserbedarf abgezogen.\n\n✅ Aktiv: für normale Außenflächen (Wiese, Beet)\n❌ Inaktiv: überdachte Bereiche, Gewächshaus, Balkon',
+        'tip.zone_adaptive': 'Adaptiver Modus: Bewässerungsdauer wird täglich aus ETo + Wetterdaten neu berechnet.\n\n✅ Aktiv (empfohlen): präzise, wetterangepasste Bewässerung\n❌ Inaktiv: immer feste Dauer = max_duration (für Tests oder einfache Zeitpläne)',
         'tweak.save': '💾 Speichern',
         'tweak.saving': '⏳ Speichert…',
         'toast.tweak_saved': '✅ Zone {id} aktualisiert',
@@ -1193,6 +1229,20 @@
         'toast.schedule_error': 'Failed to save schedule',
         'tweak.title': 'Zone Fine Tuning',
         'tweak.desc': 'Adjust per-zone calculation parameters and save directly.',
+        'tip.zone_name': 'Display name of the zone in the dashboard.\nChoose a descriptive name like "Lawn" or "Veggie Bed".',
+        'tip.zone_switch_entity': 'HA switch entity for the solenoid valve of this zone.\nExample: switch.valve_lawn\nStart typing for autocomplete suggestions from HA.',
+        'tip.zone_adjustment_percent': 'Manual correction factor for the calculated water demand.\n100% = default (unchanged)\n↑ More water: 110–130% – thirsty plants, heat periods\n↓ Less water: 70–90% – shaded spots, hardy plants',
+        'tip.zone_efficiency': 'Efficiency of the irrigation system in %.\nDrip irrigation:  85–95%\nMicro-spray:      75–85%\nSprinkler:        65–80%\nHand watering:    50–70%\nLower value → more water scheduled to achieve the same effect.',
+        'tip.zone_crop_coef': 'Plant coefficient Kc per FAO-56.\nHow much water the plant needs relative to the reference ETo.\n\n🌿 Lawn / Grass:       0.8–1.0\n🥬 Vegetables:         0.7–1.2\n🌸 Ornamental shrubs:  0.5–0.7\n🌳 Fruit trees:        0.6–0.9\n🌿 Hedges / Boxwood:   0.5–0.8\n🌵 Succulents:         0.2–0.4',
+        'tip.zone_plant_density': 'Plant coverage of the area.\n1.0 = fully covered\n0.5 = sparse (50% bare soil)\n1.2–1.5 = very dense / overlapping\n\n🌿 Dense lawn:         1.0\n🥬 Vegetable bed:      0.8–1.1\n🌸 Young shrubs:       0.5–0.7\n🌳 Shrub border:       0.6–1.0',
+        'tip.zone_exposure_factor': 'Location factor for sun and wind exposure.\n\n☀️🌬 Full sun + wind:      1.2–1.4\n☀️  Full sun, sheltered:   1.0–1.1\n🌤  Part shade:            0.8–0.9\n🌳  Full shade:            0.6–0.7',
+        'tip.zone_area': 'Irrigated area in m².\nUsed to calculate the absolute water demand in litres.\nFormula: ETo × Kc × density × exposure × area = litres needed',
+        'tip.zone_flow_rate': 'Flow rate per individual emitter in litres/hour.\nUsually printed on the emitter or in its datasheet.\n\n💧 Drip emitter:   1–4 L/h\n🌿 Micro-spray:    30–80 L/h\n🌧 Sprinkler:     100–300 L/h\n\nTotal flow = flow rate × emitter count',
+        'tip.zone_emitter_count': 'Number of emitters (drippers / sprinklers) in this zone.\nTotal flow = flow rate [L/h] × count\n\nExample: 4 sprinklers × 210 L/h = 840 L/h total flow',
+        'tip.zone_rain_threshold': 'Rain threshold in mm.\nIf accumulated rainfall since the last run exceeds this value, the zone is skipped.\n\n💡 Recommendation:\n  2–4 mm: Lawn, vegetables\n  4–6 mm: Ornamental shrubs\n  6–10 mm: Hedges, hardy plants',
+        'tip.zone_max_duration': 'Maximum run time per cycle in minutes.\nIrrigationPro splits the total duration across multiple cycles (cycle & soak)\nso water can soak in between.\n\n💡 Recommendation:\n  10–20 min: Steep slopes / clay soils\n  20–30 min: Standard lawn\n  30–60 min: Drip / slow-draining soils',
+        'tip.zone_rain_factoring': 'When enabled: accumulated rain is subtracted from the water demand.\n\n✅ Enabled: for normal outdoor areas (lawn, beds)\n❌ Disabled: covered areas, greenhouse, balcony plants',
+        'tip.zone_adaptive': 'Adaptive mode: watering duration is recalculated daily from ETo + weather data.\n\n✅ Enabled (recommended): precise, weather-adapted irrigation\n❌ Disabled: always fixed duration = max_duration (for testing or simple schedules)',
         'tweak.save': '💾 Save',
         'tweak.saving': '⏳ Saving…',
         'toast.tweak_saved': '✅ Zone {id} updated',
@@ -1245,7 +1295,7 @@
       }
     };
 
-    const UI_VERSION = '1.4.19';
+    const UI_VERSION = '1.4.20';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1532,6 +1582,14 @@
       }
     }
 
+    function toggleFieldTip(btn, ev) {
+      ev.stopPropagation();
+      const field = btn.closest('.backup-field');
+      const isOpen = field.classList.contains('tip-open');
+      document.querySelectorAll('.backup-field.tip-open').forEach(f => f.classList.remove('tip-open'));
+      if (!isOpen) field.classList.add('tip-open');
+    }
+
     function openZoneTweakModal(zoneId) {
       const entry = _lastData?.entries?.[0];
       if (!entry?.zones) return;
@@ -1548,20 +1606,22 @@
         .map(e => `<option value="${_backupEscape(e)}"></option>`)
         .join('');
       grid.innerHTML = `
-        <div class="backup-field"><label>zone_name</label><input id="tweak_zone_name" value="${_backupEscape(zone.name || '')}"></div>
-        <div class="backup-field tweak-entity-field"><label>zone_switch_entity</label><input id="tweak_zone_switch_entity" class="tweak-entity-input" list="tweakZoneSwitchEntities" value="${_backupEscape(zone.switch_entity || '')}" oninput="updateTweakEntityPreview()"><datalist id="tweakZoneSwitchEntities">${switchEntityOptions}</datalist><div id="tweakEntityPreview" class="tweak-entity-preview"></div></div>
-        <div class="backup-field"><label>zone_adjustment_percent</label><input id="tweak_zone_adjustment_percent" type="number" min="10" max="250" step="1" value="${adjustment}"><small>${t('zone.adjustment')} 100% = Standard</small></div>
-        <div class="backup-field"><label>zone_efficiency</label><input id="tweak_zone_efficiency" type="number" min="1" max="100" step="1" value="${Number(zone.efficiency ?? 90)}"></div>
-        <div class="backup-field"><label>zone_crop_coef</label><input id="tweak_zone_crop_coef" type="number" min="0.01" step="0.01" value="${Number(zone.crop_coef ?? 0.6)}"></div>
-        <div class="backup-field"><label>zone_plant_density</label><input id="tweak_zone_plant_density" type="number" min="0.01" step="0.01" value="${Number(zone.plant_density ?? 1.0)}"></div>
-        <div class="backup-field"><label>zone_exposure_factor</label><input id="tweak_zone_exposure_factor" type="number" min="0.01" step="0.01" value="${Number(zone.exposure_factor ?? 1.0)}"></div>
-        <div class="backup-field"><label>zone_area</label><input id="tweak_zone_area" type="number" min="0.1" step="0.1" value="${Number(zone.area ?? 10)}"></div>
-        <div class="backup-field"><label>zone_flow_rate</label><input id="tweak_zone_flow_rate" type="number" min="0.1" step="0.1" value="${Number(zone.flow_rate ?? 2)}"></div>
-        <div class="backup-field"><label>zone_emitter_count</label><input id="tweak_zone_emitter_count" type="number" min="1" step="1" value="${Number(zone.emitter_count ?? 10)}"></div>
-        <div class="backup-field"><label>zone_rain_threshold</label><input id="tweak_zone_rain_threshold" type="number" min="0" step="0.1" value="${Number(zone.rain_threshold ?? 2.5)}"></div>
-        <div class="backup-field"><label>zone_max_duration</label><input id="tweak_zone_max_duration" type="number" min="1" step="1" value="${Number(zone.max_duration ?? 60)}"></div>
-        <div class="backup-field"><label>zone_rain_factoring</label><select id="tweak_zone_rain_factoring"><option value="true" ${zone.rain_factoring ? 'selected' : ''}>true</option><option value="false" ${!zone.rain_factoring ? 'selected' : ''}>false</option></select></div>
-        <div class="backup-field"><label>zone_adaptive</label><select id="tweak_zone_adaptive"><option value="true" ${zone.adaptive ? 'selected' : ''}>true</option><option value="false" ${!zone.adaptive ? 'selected' : ''}>false</option></select></div>
+      const _i = key => `<span class="field-info-btn" onclick="toggleFieldTip(this,event)">i</span><span class="field-tooltip">${t(key)}</span>`;
+      grid.innerHTML = `
+        <div class="backup-field"><label>zone_name ${_i('tip.zone_name')}</label><input id="tweak_zone_name" value="${_backupEscape(zone.name || '')}"></div>
+        <div class="backup-field tweak-entity-field"><label>zone_switch_entity ${_i('tip.zone_switch_entity')}</label><input id="tweak_zone_switch_entity" class="tweak-entity-input" list="tweakZoneSwitchEntities" value="${_backupEscape(zone.switch_entity || '')}" oninput="updateTweakEntityPreview()"><datalist id="tweakZoneSwitchEntities">${switchEntityOptions}</datalist><div id="tweakEntityPreview" class="tweak-entity-preview"></div></div>
+        <div class="backup-field"><label>zone_adjustment_percent ${_i('tip.zone_adjustment_percent')}</label><input id="tweak_zone_adjustment_percent" type="number" min="10" max="250" step="1" value="${adjustment}"><small>${t('zone.adjustment')} 100% = Standard</small></div>
+        <div class="backup-field"><label>zone_efficiency ${_i('tip.zone_efficiency')}</label><input id="tweak_zone_efficiency" type="number" min="1" max="100" step="1" value="${Number(zone.efficiency ?? 90)}"></div>
+        <div class="backup-field"><label>zone_crop_coef ${_i('tip.zone_crop_coef')}</label><input id="tweak_zone_crop_coef" type="number" min="0.01" step="0.01" value="${Number(zone.crop_coef ?? 0.6)}"></div>
+        <div class="backup-field"><label>zone_plant_density ${_i('tip.zone_plant_density')}</label><input id="tweak_zone_plant_density" type="number" min="0.01" step="0.01" value="${Number(zone.plant_density ?? 1.0)}"></div>
+        <div class="backup-field"><label>zone_exposure_factor ${_i('tip.zone_exposure_factor')}</label><input id="tweak_zone_exposure_factor" type="number" min="0.01" step="0.01" value="${Number(zone.exposure_factor ?? 1.0)}"></div>
+        <div class="backup-field"><label>zone_area ${_i('tip.zone_area')}</label><input id="tweak_zone_area" type="number" min="0.1" step="0.1" value="${Number(zone.area ?? 10)}"></div>
+        <div class="backup-field"><label>zone_flow_rate ${_i('tip.zone_flow_rate')}</label><input id="tweak_zone_flow_rate" type="number" min="0.1" step="0.1" value="${Number(zone.flow_rate ?? 2)}"></div>
+        <div class="backup-field"><label>zone_emitter_count ${_i('tip.zone_emitter_count')}</label><input id="tweak_zone_emitter_count" type="number" min="1" step="1" value="${Number(zone.emitter_count ?? 10)}"></div>
+        <div class="backup-field"><label>zone_rain_threshold ${_i('tip.zone_rain_threshold')}</label><input id="tweak_zone_rain_threshold" type="number" min="0" step="0.1" value="${Number(zone.rain_threshold ?? 2.5)}"></div>
+        <div class="backup-field"><label>zone_max_duration ${_i('tip.zone_max_duration')}</label><input id="tweak_zone_max_duration" type="number" min="1" step="1" value="${Number(zone.max_duration ?? 60)}"></div>
+        <div class="backup-field"><label>zone_rain_factoring ${_i('tip.zone_rain_factoring')}</label><select id="tweak_zone_rain_factoring"><option value="true" ${zone.rain_factoring ? 'selected' : ''}>true</option><option value="false" ${!zone.rain_factoring ? 'selected' : ''}>false</option></select></div>
+        <div class="backup-field"><label>zone_adaptive ${_i('tip.zone_adaptive')}</label><select id="tweak_zone_adaptive"><option value="true" ${zone.adaptive ? 'selected' : ''}>true</option><option value="false" ${!zone.adaptive ? 'selected' : ''}>false</option></select></div>
       `;
 
       document.getElementById('zoneTweakModal').classList.add('open');
