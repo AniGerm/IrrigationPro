@@ -45,6 +45,11 @@ CONF_DAILY_REPORT_HOUR: Final = "daily_report_hour"
 # Solar radiation (monthly average kWh/day)
 CONF_SOLAR_RADIATION: Final = "solar_radiation"
 
+# HomeKit native integration
+CONF_HOMEKIT_ENABLED: Final = "homekit_enabled"
+CONF_HOMEKIT_PORT: Final = "homekit_port"
+CONF_HOMEKIT_PIN: Final = "homekit_pin"
+
 # OWM fallback
 CONF_OWM_API_KEY: Final = "owm_api_key"
 CONF_USE_OWM: Final = "use_owm"
@@ -60,6 +65,9 @@ DEFAULT_PUSHOVER_ENABLED: Final = False
 DEFAULT_PUSHOVER_PRIORITY: Final = 0
 DEFAULT_DAILY_REPORT_ENABLED: Final = False
 DEFAULT_DAILY_REPORT_HOUR: Final = 7
+DEFAULT_HOMEKIT_ENABLED: Final = False
+DEFAULT_HOMEKIT_PORT: Final = 21064
+DEFAULT_HOMEKIT_PIN: Final = "246-35-790"
 DEFAULT_ZONE_AREA: Final = 10.0
 DEFAULT_ZONE_FLOW_RATE: Final = 2.0
 DEFAULT_ZONE_EFFICIENCY: Final = 90

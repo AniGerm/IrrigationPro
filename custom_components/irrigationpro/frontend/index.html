@@ -915,6 +915,42 @@
     </div>
   </div>
 
+  <!-- HomeKit Settings Modal -->
+  <div class="modal-backdrop" id="homekitModal" onclick="if(event.target===this)closeHomeKitModal()">
+    <div class="modal" style="max-width:560px">
+      <button class="modal-close" onclick="closeHomeKitModal()">✕</button>
+      <div class="modal-title" data-i18n="hk.title">🏠 HomeKit Sprinkler</div>
+      <div class="modal-section">
+        <p data-i18n="hk.desc" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Stellt eine native HomeKit-Bewässerungsanlage bereit. In Apple Home erscheint das iOS-Sprinkler-Menü mit Zonen-Schaltern und Timer.</p>
+        <div class="backup-grid" style="grid-template-columns:1fr;gap:10px">
+          <div class="backup-field">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="hk_enabled">
+              <span data-i18n="hk.enable">HomeKit Sprinkler aktivieren</span>
+            </label>
+          </div>
+          <div class="backup-field">
+            <label data-i18n="hk.port_label">Port</label>
+            <input id="hk_port" type="number" min="1024" max="65535" value="21064">
+            <small data-i18n="hk.port_help">HAP-Server-Port (Standard: 21064). Muss sich von HA's HomeKit-Bridge unterscheiden.</small>
+          </div>
+          <div class="backup-field">
+            <label data-i18n="hk.pin_label">Kopplungscode (PIN)</label>
+            <input id="hk_pin" type="text" value="246-35-790" pattern="\d{3}-\d{2}-\d{3}" maxlength="10">
+            <small data-i18n="hk.pin_help">Im Format XXX-XX-XXX. Diesen Code in Apple Home eingeben, um das Sprinkler-Zubehör zu koppeln.</small>
+          </div>
+          <div id="hk_status_box" style="padding:8px 12px;border-radius:6px;font-size:13px;background:var(--bg-elevated);display:none">
+            <span id="hk_status_text"></span>
+          </div>
+        </div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" onclick="closeHomeKitModal()" data-i18n="sched.cancel">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" id="saveHkBtn" onclick="saveHomeKitSettings()" data-i18n="hk.save">💾 Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Zone Tweak Modal -->
   <div class="modal-backdrop" id="zoneTweakModal" onclick="if(event.target===this)closeZoneTweakModal()">
     <div class="modal" style="max-width:920px;width:95%">
@@ -938,6 +974,7 @@
       <span class="auto-refresh" id="lastUpdate">--</span>
       <button class="btn-test" onclick="openHistoryModal()" title="Historie">🗓️</button>
       <button class="btn-test" onclick="openSolarModal()" id="solarBtn" title="Sonneneinstrahlung">☀️</button>
+      <button class="btn-test" onclick="openHomeKitModal()" id="hkBtn" title="HomeKit Sprinkler">🏠</button>
       <button class="btn-test" onclick="openBackupModal()" id="backupBtn" title="Backup / Restore">💾</button>
       <button class="btn-test" onclick="openTestModal()" title="Test-Modus">🧪</button>
       <button class="btn-lang" onclick="toggleLang()" id="langBtn">EN</button>
@@ -970,6 +1007,10 @@
     <div class="status-item" style="cursor:pointer" onclick="openTemperatureModal()" title="🌡 Temperaturschwellen bearbeiten">
       <span class="status-label" data-i18n="status.temp_threshold">Temperaturschwelle</span>
       <span class="status-value" id="tempThresholdValue" style="text-decoration:underline dotted">--</span>
+    </div>
+    <div class="status-item" style="cursor:pointer" onclick="openHomeKitModal()" title="🏠 HomeKit Sprinkler">
+      <span class="status-label">HomeKit</span>
+      <span class="status-value" id="hkStatusValue" style="text-decoration:underline dotted">--</span>
     </div>
   </div>
 
@@ -1156,6 +1197,21 @@
         'toast.temp_saved': '✅ Temperaturschwellen gespeichert',
         'toast.temp_error': 'Fehler beim Speichern der Temperaturschwellen',
         'reason.temp_threshold': 'Zu kalt für Bewässerung: gemessen min {min}°C / max {max}°C. Erforderlich sind mindestens {low}°C (Nachtminimum) und {high}°C (Tagesmaximum).',
+        'hk.title': '🏠 HomeKit Sprinkler',
+        'hk.desc': 'Stellt eine native HomeKit-Bewässerungsanlage bereit. In Apple Home erscheint das iOS-Sprinkler-Menü mit Zonen-Schaltern und Timer.',
+        'hk.enable': 'HomeKit Sprinkler aktivieren',
+        'hk.port_label': 'Port',
+        'hk.port_help': 'HAP-Server-Port (Standard: 21064). Muss sich von HAs HomeKit-Bridge unterscheiden.',
+        'hk.pin_label': 'Kopplungscode (PIN)',
+        'hk.pin_help': 'Im Format XXX-XX-XXX. Diesen Code in Apple Home eingeben, um das Sprinkler-Zubehör zu koppeln.',
+        'hk.save': '💾 Speichern',
+        'hk.saving': '⏳ Speichert…',
+        'hk.status_running': '✅ HomeKit-Server läuft auf Port {port}',
+        'hk.status_stopped': '⏹ HomeKit-Server gestoppt',
+        'hk.status_off': 'HomeKit ist deaktiviert',
+        'hk.pair_hint': '📱 Öffne Apple Home → Gerät hinzufügen → Code eingeben: {pin}',
+        'toast.hk_saved': '✅ HomeKit-Einstellungen gespeichert',
+        'toast.hk_error': 'Fehler beim Speichern der HomeKit-Einstellungen',
         'no_scheduled': 'Nicht geplant',
         'hist.title': '🗓️ Bewässerungs-Historie',
         'hist.calendar_range': 'Kalenderübersicht',
@@ -1332,6 +1388,21 @@
         'toast.temp_saved': '✅ Temperature thresholds saved',
         'toast.temp_error': 'Failed to save temperature thresholds',
         'reason.temp_threshold': 'Too cold for watering: measured min {min}°C / max {max}°C. Required: at least {low}°C (night minimum) and {high}°C (daytime maximum).',
+        'hk.title': '🏠 HomeKit Sprinkler',
+        'hk.desc': 'Provides a native HomeKit irrigation system. Apple Home shows the iOS sprinkler menu with zone toggles and timer.',
+        'hk.enable': 'Enable HomeKit Sprinkler',
+        'hk.port_label': 'Port',
+        'hk.port_help': 'HAP server port (default: 21064). Must differ from HA\'s HomeKit bridge.',
+        'hk.pin_label': 'Pairing Code (PIN)',
+        'hk.pin_help': 'Format XXX-XX-XXX. Enter this code in Apple Home to pair the sprinkler accessory.',
+        'hk.save': '💾 Save',
+        'hk.saving': '⏳ Saving…',
+        'hk.status_running': '✅ HomeKit server running on port {port}',
+        'hk.status_stopped': '⏹ HomeKit server stopped',
+        'hk.status_off': 'HomeKit is disabled',
+        'hk.pair_hint': '📱 Open Apple Home → Add Accessory → Enter code: {pin}',
+        'toast.hk_saved': '✅ HomeKit settings saved',
+        'toast.hk_error': 'Failed to save HomeKit settings',
         'no_scheduled': 'Not scheduled',
         'hist.title': '🗓️ Irrigation History',
         'hist.calendar_range': 'Calendar Overview',
@@ -2022,6 +2093,13 @@
         tempThresholdEl.textContent = t('temp.value', { low: String(low), high: String(high) });
       }
 
+      const hkEl = document.getElementById('hkStatusValue');
+      if (hkEl) {
+        if (entry.homekit_running) hkEl.textContent = '✅ Port ' + (entry.homekit_port || 21064);
+        else if (entry.homekit_enabled) hkEl.textContent = '⏹ Gestoppt';
+        else hkEl.textContent = '—';
+      }
+
       // Reason why no schedule
       let srEl = document.getElementById('scheduleReason');
       if (!srEl) {
@@ -2581,6 +2659,80 @@
         await loadData();
       } catch (err) {
         showToast(t('toast.temp_error') + ': ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevLabel;
+      }
+    }
+
+    function openHomeKitModal() {
+      const entry = _lastData?.entries?.[0];
+      if (entry) {
+        document.getElementById('hk_enabled').checked = !!entry.homekit_enabled;
+        document.getElementById('hk_port').value = entry.homekit_port || 21064;
+        document.getElementById('hk_pin').value = entry.homekit_pin || '246-35-790';
+
+        const box = document.getElementById('hk_status_box');
+        const txt = document.getElementById('hk_status_text');
+        box.style.display = 'block';
+        if (entry.homekit_running) {
+          txt.innerHTML = t('hk.status_running', {port: entry.homekit_port}) + '<br>' + t('hk.pair_hint', {pin: entry.homekit_pin});
+          box.style.borderLeft = '3px solid var(--color-success)';
+        } else if (entry.homekit_enabled) {
+          txt.textContent = t('hk.status_stopped');
+          box.style.borderLeft = '3px solid var(--color-warning)';
+        } else {
+          txt.textContent = t('hk.status_off');
+          box.style.borderLeft = '3px solid var(--text-secondary)';
+        }
+      }
+      document.getElementById('homekitModal').classList.add('open');
+      document.querySelectorAll('#homekitModal [data-i18n]').forEach(el => {
+        el.textContent = t(el.dataset.i18n);
+      });
+    }
+
+    function closeHomeKitModal() {
+      document.getElementById('homekitModal').classList.remove('open');
+    }
+
+    async function saveHomeKitSettings() {
+      const btn = document.getElementById('saveHkBtn');
+      const prevLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = t('hk.saving');
+
+      const enabled = document.getElementById('hk_enabled').checked;
+      const port = Number(document.getElementById('hk_port').value || 21064);
+      const pin = document.getElementById('hk_pin').value.trim();
+
+      if (!/^\d{3}-\d{2}-\d{3}$/.test(pin)) {
+        showToast(t('toast.hk_error') + ': PIN im Format XXX-XX-XXX', 'error');
+        btn.disabled = false;
+        btn.textContent = prevLabel;
+        return;
+      }
+
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const resp = await fetch(API_BASE + '/settings/homekit', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({
+            entry_id: entryId,
+            enabled: enabled,
+            port: port,
+            pin: pin,
+          })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+        showToast(t('toast.hk_saved'), 'success');
+        closeHomeKitModal();
+        await loadData();
+      } catch (err) {
+        showToast(t('toast.hk_error') + ': ' + err.message, 'error');
       } finally {
         btn.disabled = false;
         btn.textContent = prevLabel;

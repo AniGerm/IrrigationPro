@@ -15,6 +15,9 @@ from .const import (
     CONF_DAILY_REPORT_ENABLED,
     CONF_DAILY_REPORT_HOUR,
     CONF_HIGH_THRESHOLD,
+    CONF_HOMEKIT_ENABLED,
+    CONF_HOMEKIT_PIN,
+    CONF_HOMEKIT_PORT,
     CONF_LANGUAGE,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
@@ -50,6 +53,9 @@ from .const import (
     DEFAULT_DAILY_REPORT_ENABLED,
     DEFAULT_DAILY_REPORT_HOUR,
     DEFAULT_HIGH_THRESHOLD,
+    DEFAULT_HOMEKIT_ENABLED,
+    DEFAULT_HOMEKIT_PIN,
+    DEFAULT_HOMEKIT_PORT,
     DEFAULT_LANGUAGE,
     DEFAULT_LOW_THRESHOLD,
     DEFAULT_PUSHOVER_ENABLED,
@@ -592,6 +598,10 @@ class IrrigationProApiView(HomeAssistantView):
                 "available_weather_entities": sorted(
                     list(hass.states.async_entity_ids("weather"))
                 ),
+                "homekit_enabled": bool(coordinator.entry.data.get(CONF_HOMEKIT_ENABLED, DEFAULT_HOMEKIT_ENABLED)),
+                "homekit_port": int(coordinator.entry.data.get(CONF_HOMEKIT_PORT, DEFAULT_HOMEKIT_PORT)),
+                "homekit_pin": str(coordinator.entry.data.get(CONF_HOMEKIT_PIN, DEFAULT_HOMEKIT_PIN)),
+                "homekit_running": getattr(coordinator.homekit_server, "is_running", False) if coordinator.homekit_server else False,
             }
             result["entries"].append(entry_data)
 
@@ -897,6 +907,79 @@ class IrrigationProSettingsTemperatureView(HomeAssistantView):
         return self.json({"status": "ok", "low_threshold": low, "high_threshold": high})
 
 
+class IrrigationProSettingsHomeKitView(HomeAssistantView):
+    """API view to enable/disable the native HomeKit sprinkler server."""
+
+    url = "/api/irrigationpro/settings/homekit"
+    name = "api:irrigationpro:settings_homekit"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Toggle HomeKit server and persist settings."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            data = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        entry_id = data.get("entry_id") if isinstance(data, dict) else None
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        enabled = bool(data.get("enabled", False))
+        port = int(data.get("port", coordinator.entry.data.get(CONF_HOMEKIT_PORT, DEFAULT_HOMEKIT_PORT)))
+        pin = str(data.get("pin", coordinator.entry.data.get(CONF_HOMEKIT_PIN, DEFAULT_HOMEKIT_PIN)))
+
+        # Basic validation
+        if port < 1024 or port > 65535:
+            return self.json({"error": "port must be between 1024 and 65535"}, status_code=400)
+
+        import re
+        if not re.match(r"^\d{3}-\d{2}-\d{3}$", pin):
+            return self.json({"error": "pin must be in format XXX-XX-XXX"}, status_code=400)
+
+        # Persist
+        hass.config_entries.async_update_entry(
+            coordinator.entry,
+            data={
+                **coordinator.entry.data,
+                CONF_HOMEKIT_ENABLED: enabled,
+                CONF_HOMEKIT_PORT: port,
+                CONF_HOMEKIT_PIN: pin,
+            },
+        )
+
+        # Start / stop server
+        if enabled and not (coordinator.homekit_server and coordinator.homekit_server.is_running):
+            try:
+                from .homekit_server import IrrigationProHomeKit, HAS_HAP
+
+                if not HAS_HAP:
+                    return self.json({"error": "HAP-python not installed"}, status_code=500)
+
+                if coordinator.homekit_server:
+                    await hass.async_add_executor_job(coordinator.homekit_server.stop)
+
+                hk = IrrigationProHomeKit(
+                    hass, coordinator,
+                    port=port,
+                    pin_code=pin,
+                    persist_file=hass.config.path("irrigationpro_homekit.state"),
+                )
+                await hass.async_add_executor_job(hk.start)
+                coordinator.homekit_server = hk
+            except Exception as err:
+                _LOGGER.exception("HomeKit start failed")
+                return self.json({"error": str(err)}, status_code=500)
+
+        elif not enabled and coordinator.homekit_server and coordinator.homekit_server.is_running:
+            await hass.async_add_executor_job(coordinator.homekit_server.stop)
+
+        running = getattr(coordinator.homekit_server, "is_running", False) if coordinator.homekit_server else False
+        return self.json({"status": "ok", "homekit_enabled": enabled, "homekit_running": running, "port": port, "pin": pin})
+
+
 class IrrigationProBackupExportView(HomeAssistantView):
     """API view to export current integration configuration as backup."""
 
@@ -1198,6 +1281,7 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(IrrigationProSettingsLanguageView)
     hass.http.register_view(IrrigationProSettingsSolarView)
     hass.http.register_view(IrrigationProSettingsTemperatureView)
+    hass.http.register_view(IrrigationProSettingsHomeKitView)
     hass.http.register_view(IrrigationProBackupExportView)
     hass.http.register_view(IrrigationProBackupRestoreView)
     hass.http.register_view(IrrigationProBackupPrepareView)

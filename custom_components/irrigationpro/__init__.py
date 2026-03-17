@@ -17,7 +17,13 @@ from .api import async_register_api
 from .const import (
     ATTR_DURATION,
     ATTR_ZONE_ID,
+    CONF_HOMEKIT_ENABLED,
+    CONF_HOMEKIT_PIN,
+    CONF_HOMEKIT_PORT,
     CONF_ZONES,
+    DEFAULT_HOMEKIT_ENABLED,
+    DEFAULT_HOMEKIT_PIN,
+    DEFAULT_HOMEKIT_PORT,
     DOMAIN,
     SERVICE_RECALCULATE,
     SERVICE_START_ZONE,
@@ -89,6 +95,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             hass.data[f"{DOMAIN}_panel_registered"] = True
 
+        # Start HomeKit server if enabled
+        if entry.data.get(CONF_HOMEKIT_ENABLED, DEFAULT_HOMEKIT_ENABLED):
+            try:
+                from .homekit_server import IrrigationProHomeKit, HAS_HAP
+
+                if HAS_HAP:
+                    hk = IrrigationProHomeKit(
+                        hass,
+                        coordinator,
+                        port=entry.data.get(CONF_HOMEKIT_PORT, DEFAULT_HOMEKIT_PORT),
+                        pin_code=entry.data.get(CONF_HOMEKIT_PIN, DEFAULT_HOMEKIT_PIN),
+                        persist_file=hass.config.path("irrigationpro_homekit.state"),
+                    )
+                    await hass.async_add_executor_job(hk.start)
+                    coordinator.homekit_server = hk
+                else:
+                    _LOGGER.warning("HomeKit enabled but HAP-python not installed")
+            except Exception as hk_err:
+                _LOGGER.error("HomeKit server failed to start: %s", hk_err)
+
         _LOGGER.info("IrrigationPro setup completed successfully")
         return True
         
@@ -108,6 +134,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         coordinator: SmartIrrigationCoordinator = hass.data[DOMAIN][entry.entry_id]
         
+        # Stop HomeKit server
+        if coordinator.homekit_server:
+            await hass.async_add_executor_job(coordinator.homekit_server.stop)
+
         # Cancel any scheduled jobs
         await coordinator.async_shutdown()
         

@@ -265,6 +265,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self.last_refresh_time: datetime | None = None  # Last successful coordinator refresh
         self._daily_report_unsub = None
         self._watering_started_at: datetime | None = None
+        self.homekit_server = None  # Set by __init__.py if HomeKit enabled
         
         # Validate configuration
         if not entry.data.get(CONF_WEATHER_ENTITY):
