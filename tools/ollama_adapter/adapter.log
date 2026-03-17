@@ -1,5 +1,0 @@
-nohup: Eingabe wird ignoriert
- * Serving Flask app 'adapter'
- * Debug mode: off
-Address already in use
-Port 11435 is in use by another program. Either identify and stop that program, or start the server with a different port.
