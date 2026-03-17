@@ -567,6 +567,26 @@
       color: var(--text-secondary);
       font-size: 11px;
     }
+    .tweak-entity-field {
+      grid-column: 1 / -1;
+    }
+    .tweak-entity-input {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+    .tweak-entity-preview {
+      margin-top: 4px;
+      padding: 6px 8px;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      background: rgba(0,0,0,0.03);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
 
     .btn-test {
       background: var(--card-bg);
@@ -848,7 +868,7 @@
 
   <!-- Zone Tweak Modal -->
   <div class="modal-backdrop" id="zoneTweakModal" onclick="if(event.target===this)closeZoneTweakModal()">
-    <div class="modal" style="max-width:760px">
+    <div class="modal" style="max-width:920px;width:95%">
       <button class="modal-close" onclick="closeZoneTweakModal()">✕</button>
       <div class="modal-title" id="zoneTweakTitle">🎛️</div>
       <div class="modal-section">
@@ -1219,7 +1239,7 @@
       }
     };
 
-    const UI_VERSION = '1.4.16';
+    const UI_VERSION = '1.4.17';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1523,7 +1543,7 @@
         .join('');
       grid.innerHTML = `
         <div class="backup-field"><label>zone_name</label><input id="tweak_zone_name" value="${_backupEscape(zone.name || '')}"></div>
-        <div class="backup-field"><label>zone_switch_entity</label><input id="tweak_zone_switch_entity" list="tweakZoneSwitchEntities" value="${_backupEscape(zone.switch_entity || '')}"><datalist id="tweakZoneSwitchEntities">${switchEntityOptions}</datalist></div>
+        <div class="backup-field tweak-entity-field"><label>zone_switch_entity</label><input id="tweak_zone_switch_entity" class="tweak-entity-input" list="tweakZoneSwitchEntities" value="${_backupEscape(zone.switch_entity || '')}" oninput="updateTweakEntityPreview()"><datalist id="tweakZoneSwitchEntities">${switchEntityOptions}</datalist><div id="tweakEntityPreview" class="tweak-entity-preview"></div></div>
         <div class="backup-field"><label>zone_adjustment_percent</label><input id="tweak_zone_adjustment_percent" type="number" min="10" max="250" step="1" value="${adjustment}"><small>${t('zone.adjustment')} 100% = Standard</small></div>
         <div class="backup-field"><label>zone_efficiency</label><input id="tweak_zone_efficiency" type="number" min="1" max="100" step="1" value="${Number(zone.efficiency ?? 90)}"></div>
         <div class="backup-field"><label>zone_crop_coef</label><input id="tweak_zone_crop_coef" type="number" min="0.01" step="0.01" value="${Number(zone.crop_coef ?? 0.6)}"></div>
@@ -1542,6 +1562,16 @@
       document.querySelectorAll('#zoneTweakModal [data-i18n]').forEach(el => {
         el.textContent = t(el.getAttribute('data-i18n'));
       });
+      updateTweakEntityPreview();
+    }
+
+    function updateTweakEntityPreview() {
+      const inputEl = document.getElementById('tweak_zone_switch_entity');
+      const previewEl = document.getElementById('tweakEntityPreview');
+      if (!inputEl || !previewEl) return;
+      const value = (inputEl.value || '').trim();
+      inputEl.title = value;
+      previewEl.textContent = value || '-';
     }
 
     function closeZoneTweakModal() {
