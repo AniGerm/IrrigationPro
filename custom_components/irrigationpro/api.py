@@ -29,6 +29,7 @@ from .const import (
     CONF_USE_OWM,
     CONF_WEATHER_ENTITY,
     CONF_ZONE_ADAPTIVE,
+    CONF_ZONE_ADJUSTMENT_PERCENT,
     CONF_ZONE_AREA,
     CONF_ZONE_CROP_COEF,
     CONF_ZONE_EFFICIENCY,
@@ -57,6 +58,7 @@ from .const import (
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_SUNRISE_OFFSET,
     DEFAULT_ZONE_ADAPTIVE,
+    DEFAULT_ZONE_ADJUSTMENT_PERCENT,
     DEFAULT_ZONE_AREA,
     DEFAULT_ZONE_CROP_COEF,
     DEFAULT_ZONE_EFFICIENCY,
@@ -191,6 +193,7 @@ def _convert_legacy_payload(raw: dict[str, Any], existing_data: dict[str, Any]) 
                 CONF_ZONE_ENABLED: bool(legacy_zone.get("enabled", existing_zone.get(CONF_ZONE_ENABLED, True))),
                 CONF_ZONE_ADAPTIVE: bool(legacy_zone.get("adaptive", existing_zone.get(CONF_ZONE_ADAPTIVE, True))),
                 CONF_ZONE_RAIN_FACTORING: bool(legacy_zone.get("rainFactoring", existing_zone.get(CONF_ZONE_RAIN_FACTORING, True))),
+                CONF_ZONE_ADJUSTMENT_PERCENT: int(existing_zone.get(CONF_ZONE_ADJUSTMENT_PERCENT, DEFAULT_ZONE_ADJUSTMENT_PERCENT)),
                 CONF_ZONE_MAX_DURATION: int(legacy_zone.get("maxDuration", existing_zone.get(CONF_ZONE_MAX_DURATION, 60))),
                 CONF_ZONE_RAIN_THRESHOLD: float(legacy_zone.get("rainThreshold", existing_zone.get(CONF_ZONE_RAIN_THRESHOLD, 2.5))),
                 CONF_ZONE_AREA: float(legacy_zone.get("dripArea", existing_zone.get(CONF_ZONE_AREA, 10.0))),
@@ -312,6 +315,7 @@ def _normalize_zone(zone: dict[str, Any], index: int, existing_zone: dict[str, A
         CONF_ZONE_CROP_COEF: DEFAULT_ZONE_CROP_COEF,
         CONF_ZONE_PLANT_DENSITY: DEFAULT_ZONE_PLANT_DENSITY,
         CONF_ZONE_EXPOSURE_FACTOR: DEFAULT_ZONE_EXPOSURE_FACTOR,
+        CONF_ZONE_ADJUSTMENT_PERCENT: DEFAULT_ZONE_ADJUSTMENT_PERCENT,
         CONF_ZONE_WEEKDAYS: WEEKDAYS,
         CONF_ZONE_MONTHS: list(range(1, 13)),
         CONF_ZONE_SWITCH_ENTITY: "",
@@ -331,6 +335,7 @@ def _normalize_zone(zone: dict[str, Any], index: int, existing_zone: dict[str, A
         CONF_ZONE_CROP_COEF: _to_float(src.get(CONF_ZONE_CROP_COEF), DEFAULT_ZONE_CROP_COEF),
         CONF_ZONE_PLANT_DENSITY: _to_float(src.get(CONF_ZONE_PLANT_DENSITY), DEFAULT_ZONE_PLANT_DENSITY),
         CONF_ZONE_EXPOSURE_FACTOR: _to_float(src.get(CONF_ZONE_EXPOSURE_FACTOR), DEFAULT_ZONE_EXPOSURE_FACTOR),
+        CONF_ZONE_ADJUSTMENT_PERCENT: max(10, min(250, _to_int(src.get(CONF_ZONE_ADJUSTMENT_PERCENT), DEFAULT_ZONE_ADJUSTMENT_PERCENT))),
         CONF_ZONE_WEEKDAYS: _normalize_weekdays(src.get(CONF_ZONE_WEEKDAYS)),
         CONF_ZONE_MONTHS: _normalize_months(src.get(CONF_ZONE_MONTHS)),
         CONF_ZONE_SWITCH_ENTITY: str(src.get(CONF_ZONE_SWITCH_ENTITY) or "").strip() or None,
@@ -460,6 +465,10 @@ class IrrigationProApiView(HomeAssistantView):
                         "emitter_count": zone.emitter_count,
                         "efficiency": zone.efficiency,
                         "crop_coef": zone.crop_coef,
+                        "plant_density": zone.plant_density,
+                        "exposure_factor": zone.exposure_factor,
+                        "rain_factoring": zone.rain_factoring,
+                        "adjustment_percent": zone.adjustment_percent,
                         "max_duration": zone.max_duration,
                         "rain_threshold": zone.rain_threshold,
                         "adaptive": zone.adaptive,
@@ -535,6 +544,7 @@ class IrrigationProApiView(HomeAssistantView):
             entry_data = {
                 "entry_id": entry_id,
                 "language": coordinator.entry.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+                "cycles": int(coordinator.entry.data.get(CONF_CYCLES, DEFAULT_CYCLES)),
                 "current_month": month_now,
                 "current_month_solar_radiation": round(float(solar_month_val), 2) if solar_month_val is not None else None,
                 "solar_radiation": solar_all,
@@ -999,6 +1009,20 @@ class IrrigationProZoneScheduleView(HomeAssistantView):
                     "zone_name": zone.get(CONF_ZONE_NAME),
                     "zone_weekdays": zone.get(CONF_ZONE_WEEKDAYS, WEEKDAYS),
                     "zone_months": zone.get(CONF_ZONE_MONTHS, list(range(1, 13))),
+                    "zone_area": zone.get(CONF_ZONE_AREA, DEFAULT_ZONE_AREA),
+                    "zone_flow_rate": zone.get(CONF_ZONE_FLOW_RATE, DEFAULT_ZONE_FLOW_RATE),
+                    "zone_emitter_count": zone.get(CONF_ZONE_EMITTER_COUNT, DEFAULT_ZONE_EMITTER_COUNT),
+                    "zone_efficiency": zone.get(CONF_ZONE_EFFICIENCY, DEFAULT_ZONE_EFFICIENCY),
+                    "zone_crop_coef": zone.get(CONF_ZONE_CROP_COEF, DEFAULT_ZONE_CROP_COEF),
+                    "zone_plant_density": zone.get(CONF_ZONE_PLANT_DENSITY, DEFAULT_ZONE_PLANT_DENSITY),
+                    "zone_exposure_factor": zone.get(CONF_ZONE_EXPOSURE_FACTOR, DEFAULT_ZONE_EXPOSURE_FACTOR),
+                    "zone_rain_threshold": zone.get(CONF_ZONE_RAIN_THRESHOLD, DEFAULT_ZONE_RAIN_THRESHOLD),
+                    "zone_max_duration": zone.get(CONF_ZONE_MAX_DURATION, DEFAULT_ZONE_MAX_DURATION),
+                    "zone_rain_factoring": zone.get(CONF_ZONE_RAIN_FACTORING, DEFAULT_ZONE_RAIN_FACTORING),
+                    "zone_adaptive": zone.get(CONF_ZONE_ADAPTIVE, DEFAULT_ZONE_ADAPTIVE),
+                    "zone_enabled": zone.get(CONF_ZONE_ENABLED, DEFAULT_ZONE_ENABLED),
+                    "zone_adjustment_percent": zone.get(CONF_ZONE_ADJUSTMENT_PERCENT, DEFAULT_ZONE_ADJUSTMENT_PERCENT),
+                    "zone_switch_entity": zone.get(CONF_ZONE_SWITCH_ENTITY),
                 }
             )
 
@@ -1065,6 +1089,38 @@ class IrrigationProZoneScheduleView(HomeAssistantView):
                 if not months:
                     return self.json({"error": f"zone {zone_id}: zone_months must not be empty"}, status_code=400)
                 zone[CONF_ZONE_MONTHS] = sorted(set(months))
+
+            if CONF_ZONE_ADJUSTMENT_PERCENT in upd:
+                zone[CONF_ZONE_ADJUSTMENT_PERCENT] = max(10, min(250, _to_int(upd.get(CONF_ZONE_ADJUSTMENT_PERCENT), DEFAULT_ZONE_ADJUSTMENT_PERCENT)))
+
+            if CONF_ZONE_AREA in upd:
+                zone[CONF_ZONE_AREA] = max(0.1, _to_float(upd.get(CONF_ZONE_AREA), DEFAULT_ZONE_AREA))
+            if CONF_ZONE_FLOW_RATE in upd:
+                zone[CONF_ZONE_FLOW_RATE] = max(0.1, _to_float(upd.get(CONF_ZONE_FLOW_RATE), DEFAULT_ZONE_FLOW_RATE))
+            if CONF_ZONE_EMITTER_COUNT in upd:
+                zone[CONF_ZONE_EMITTER_COUNT] = max(1, _to_int(upd.get(CONF_ZONE_EMITTER_COUNT), DEFAULT_ZONE_EMITTER_COUNT))
+            if CONF_ZONE_EFFICIENCY in upd:
+                zone[CONF_ZONE_EFFICIENCY] = max(1, min(100, _to_int(upd.get(CONF_ZONE_EFFICIENCY), DEFAULT_ZONE_EFFICIENCY)))
+            if CONF_ZONE_CROP_COEF in upd:
+                zone[CONF_ZONE_CROP_COEF] = max(0.01, _to_float(upd.get(CONF_ZONE_CROP_COEF), DEFAULT_ZONE_CROP_COEF))
+            if CONF_ZONE_PLANT_DENSITY in upd:
+                zone[CONF_ZONE_PLANT_DENSITY] = max(0.01, _to_float(upd.get(CONF_ZONE_PLANT_DENSITY), DEFAULT_ZONE_PLANT_DENSITY))
+            if CONF_ZONE_EXPOSURE_FACTOR in upd:
+                zone[CONF_ZONE_EXPOSURE_FACTOR] = max(0.01, _to_float(upd.get(CONF_ZONE_EXPOSURE_FACTOR), DEFAULT_ZONE_EXPOSURE_FACTOR))
+            if CONF_ZONE_RAIN_THRESHOLD in upd:
+                zone[CONF_ZONE_RAIN_THRESHOLD] = max(0.0, _to_float(upd.get(CONF_ZONE_RAIN_THRESHOLD), DEFAULT_ZONE_RAIN_THRESHOLD))
+            if CONF_ZONE_MAX_DURATION in upd:
+                zone[CONF_ZONE_MAX_DURATION] = max(1, _to_int(upd.get(CONF_ZONE_MAX_DURATION), DEFAULT_ZONE_MAX_DURATION))
+            if CONF_ZONE_RAIN_FACTORING in upd:
+                zone[CONF_ZONE_RAIN_FACTORING] = _to_bool(upd.get(CONF_ZONE_RAIN_FACTORING), DEFAULT_ZONE_RAIN_FACTORING)
+            if CONF_ZONE_ADAPTIVE in upd:
+                zone[CONF_ZONE_ADAPTIVE] = _to_bool(upd.get(CONF_ZONE_ADAPTIVE), DEFAULT_ZONE_ADAPTIVE)
+            if CONF_ZONE_ENABLED in upd:
+                zone[CONF_ZONE_ENABLED] = _to_bool(upd.get(CONF_ZONE_ENABLED), DEFAULT_ZONE_ENABLED)
+            if CONF_ZONE_SWITCH_ENTITY in upd:
+                zone[CONF_ZONE_SWITCH_ENTITY] = str(upd.get(CONF_ZONE_SWITCH_ENTITY) or "").strip() or None
+            if CONF_ZONE_NAME in upd:
+                zone[CONF_ZONE_NAME] = str(upd.get(CONF_ZONE_NAME) or zone.get(CONF_ZONE_NAME) or f"Zone {zone_id}").strip() or f"Zone {zone_id}"
 
             updated_zone_ids.append(zone_id)
 

@@ -553,7 +553,20 @@
     .hist-meta span { display: flex; align-items: center; gap: 3px; }
     .hist-reason { font-size: 12px; color: var(--warning); margin-top: 4px; }
     .schedule-info { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 4px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
-    .schedule-info span { white-space: nowrap; }
+    .schedule-info span { white-space: normal; overflow-wrap: anywhere; }
+    .card.zone-clickable { cursor: pointer; }
+    .card.zone-clickable:hover { box-shadow: 0 8px 22px rgba(0,0,0,0.12); }
+
+    .tweak-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .tweak-form-grid .backup-field small {
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
 
     .btn-test {
       background: var(--card-bg);
@@ -702,6 +715,7 @@
       .schedule-grid { grid-template-columns: 1fr; }
       .backup-grid { grid-template-columns: 1fr; }
       .solar-grid { grid-template-columns: repeat(2, 1fr); }
+      .tweak-form-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -832,6 +846,23 @@
     </div>
   </div>
 
+  <!-- Zone Tweak Modal -->
+  <div class="modal-backdrop" id="zoneTweakModal" onclick="if(event.target===this)closeZoneTweakModal()">
+    <div class="modal" style="max-width:760px">
+      <button class="modal-close" onclick="closeZoneTweakModal()">✕</button>
+      <div class="modal-title" id="zoneTweakTitle">🎛️</div>
+      <div class="modal-section">
+        <h3 data-i18n="tweak.title">Zone-Feinabstimmung</h3>
+        <p data-i18n="tweak.desc">Passe die Berechnungsparameter pro Zone an und speichere direkt.</p>
+        <div class="tweak-form-grid" id="zoneTweakGrid"></div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" onclick="closeZoneTweakModal()" data-i18n="sched.cancel">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" id="saveZoneTweakBtn" onclick="saveZoneTweaks()" data-i18n="tweak.save">💾 Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="header">
     <h1>🌿 IrrigationPro Dashboard <span id="uiVersion" style="font-size:12px;color:var(--text-secondary);font-weight:500">--</span></h1>
     <div class="header-actions">
@@ -918,6 +949,8 @@
         'zone.efficiency': 'Effizienz',
         'zone.last_run': 'Letzter Lauf',
         'zone.next_sched': 'Nächste Bewässerung',
+        'zone.adjustment': 'Anpassung',
+        'zone.duration_split': '{total} min ({cycles}x{per}min)',
         'zone.last_calc': 'Letzte Berechnung',
         'zone.next_auto_calc': 'Nächste automatische Berechnung',
         'zone.recheck': 'Nächster Recheck',
@@ -988,6 +1021,12 @@
         'sched.none': 'Keine',
         'toast.schedule_saved': 'Bewässerungsplan für Zone {id} gespeichert',
         'toast.schedule_error': 'Fehler beim Speichern des Plans',
+        'tweak.title': 'Zone-Feinabstimmung',
+        'tweak.desc': 'Passe die Berechnungsparameter pro Zone an und speichere direkt.',
+        'tweak.save': '💾 Speichern',
+        'tweak.saving': '⏳ Speichert…',
+        'toast.tweak_saved': '✅ Zone {id} aktualisiert',
+        'toast.tweak_error': 'Fehler beim Speichern der Zone',
         'backup.title': '💾 Backup / Restore',
         'backup.export_title': 'Export',
         'backup.export_desc': 'Komplette Konfiguration als JSON-Backup herunterladen.',
@@ -1054,6 +1093,8 @@
         'zone.efficiency': 'Efficiency',
         'zone.last_run': 'Last Run',
         'zone.next_sched': 'Next Watering',
+        'zone.adjustment': 'Adjustment',
+        'zone.duration_split': '{total} min ({cycles}x{per}min)',
         'zone.last_calc': 'Last Calculation',
         'zone.next_auto_calc': 'Next Automatic Calculation',
         'zone.recheck': 'Next Recheck',
@@ -1124,6 +1165,12 @@
         'sched.none': 'None',
         'toast.schedule_saved': 'Watering schedule saved for zone {id}',
         'toast.schedule_error': 'Failed to save schedule',
+        'tweak.title': 'Zone Fine Tuning',
+        'tweak.desc': 'Adjust per-zone calculation parameters and save directly.',
+        'tweak.save': '💾 Save',
+        'tweak.saving': '⏳ Saving…',
+        'toast.tweak_saved': '✅ Zone {id} updated',
+        'toast.tweak_error': 'Failed to save zone',
         'backup.title': '💾 Backup / Restore',
         'backup.export_title': 'Export',
         'backup.export_desc': 'Download complete configuration as a JSON backup.',
@@ -1172,7 +1219,7 @@
       }
     };
 
-    const UI_VERSION = '1.4.14';
+    const UI_VERSION = '1.4.15';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1352,7 +1399,23 @@
       12: { de: 'Dezember', en: 'December' }
     };
 
+    const MONTH_NAMES_SHORT = {
+      1: { de: 'Jan', en: 'Jan' },
+      2: { de: 'Feb', en: 'Feb' },
+      3: { de: 'Mär', en: 'Mar' },
+      4: { de: 'Apr', en: 'Apr' },
+      5: { de: 'Mai', en: 'May' },
+      6: { de: 'Jun', en: 'Jun' },
+      7: { de: 'Jul', en: 'Jul' },
+      8: { de: 'Aug', en: 'Aug' },
+      9: { de: 'Sep', en: 'Sep' },
+      10: { de: 'Okt', en: 'Oct' },
+      11: { de: 'Nov', en: 'Nov' },
+      12: { de: 'Dez', en: 'Dec' }
+    };
+
     let _scheduleEditZoneId = null;
+    let _zoneTweakEditZoneId = null;
 
     function formatWeekdays(days) {
       if (!Array.isArray(days) || days.length === 0) return t('sched.none');
@@ -1365,8 +1428,17 @@
         .map(m => Number(m))
         .filter(m => m >= 1 && m <= 12)
         .sort((a, b) => a - b)
-        .map(m => MONTH_NAMES[m]?.[lang] || String(m))
+        .map(m => MONTH_NAMES_SHORT[m]?.[lang] || String(m))
         .join(', ');
+    }
+
+    function formatDurationWithCycles(durationPerCycle, cycles) {
+      const per = Number(durationPerCycle || 0);
+      const c = Math.max(1, Number(cycles || 1));
+      if (per <= 0) return '–';
+      const total = Math.round(per * c * 10) / 10;
+      const perRounded = Math.round(per * 10) / 10;
+      return t('zone.duration_split', { total, cycles: c, per: perRounded });
     }
 
     function openZoneScheduleModal(zoneId) {
@@ -1449,6 +1521,92 @@
         await loadData();
       } catch (err) {
         showToast(t('toast.schedule_error') + ': ' + err.message, 'error');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = prevLabel;
+      }
+    }
+
+    function openZoneTweakModal(zoneId) {
+      const entry = _lastData?.entries?.[0];
+      if (!entry?.zones) return;
+      const zone = entry.zones.find(z => z.zone_id === zoneId);
+      if (!zone) return;
+
+      _zoneTweakEditZoneId = zoneId;
+      document.getElementById('zoneTweakTitle').textContent = `🎛️ ${zone.name}`;
+
+      const grid = document.getElementById('zoneTweakGrid');
+      const adjustment = Number(zone.adjustment_percent ?? 100);
+      grid.innerHTML = `
+        <div class="backup-field"><label>zone_name</label><input id="tweak_zone_name" value="${_backupEscape(zone.name || '')}"></div>
+        <div class="backup-field"><label>zone_switch_entity</label><input id="tweak_zone_switch_entity" value="${_backupEscape(zone.switch_entity || '')}"></div>
+        <div class="backup-field"><label>zone_adjustment_percent</label><input id="tweak_zone_adjustment_percent" type="number" min="10" max="250" step="1" value="${adjustment}"><small>${t('zone.adjustment')} 100% = Standard</small></div>
+        <div class="backup-field"><label>zone_efficiency</label><input id="tweak_zone_efficiency" type="number" min="1" max="100" step="1" value="${Number(zone.efficiency ?? 90)}"></div>
+        <div class="backup-field"><label>zone_crop_coef</label><input id="tweak_zone_crop_coef" type="number" min="0.01" step="0.01" value="${Number(zone.crop_coef ?? 0.6)}"></div>
+        <div class="backup-field"><label>zone_plant_density</label><input id="tweak_zone_plant_density" type="number" min="0.01" step="0.01" value="${Number(zone.plant_density ?? 1.0)}"></div>
+        <div class="backup-field"><label>zone_exposure_factor</label><input id="tweak_zone_exposure_factor" type="number" min="0.01" step="0.01" value="${Number(zone.exposure_factor ?? 1.0)}"></div>
+        <div class="backup-field"><label>zone_area</label><input id="tweak_zone_area" type="number" min="0.1" step="0.1" value="${Number(zone.area ?? 10)}"></div>
+        <div class="backup-field"><label>zone_flow_rate</label><input id="tweak_zone_flow_rate" type="number" min="0.1" step="0.1" value="${Number(zone.flow_rate ?? 2)}"></div>
+        <div class="backup-field"><label>zone_emitter_count</label><input id="tweak_zone_emitter_count" type="number" min="1" step="1" value="${Number(zone.emitter_count ?? 10)}"></div>
+        <div class="backup-field"><label>zone_rain_threshold</label><input id="tweak_zone_rain_threshold" type="number" min="0" step="0.1" value="${Number(zone.rain_threshold ?? 2.5)}"></div>
+        <div class="backup-field"><label>zone_max_duration</label><input id="tweak_zone_max_duration" type="number" min="1" step="1" value="${Number(zone.max_duration ?? 60)}"></div>
+        <div class="backup-field"><label>zone_rain_factoring</label><select id="tweak_zone_rain_factoring"><option value="true" ${zone.rain_factoring ? 'selected' : ''}>true</option><option value="false" ${!zone.rain_factoring ? 'selected' : ''}>false</option></select></div>
+        <div class="backup-field"><label>zone_adaptive</label><select id="tweak_zone_adaptive"><option value="true" ${zone.adaptive ? 'selected' : ''}>true</option><option value="false" ${!zone.adaptive ? 'selected' : ''}>false</option></select></div>
+      `;
+
+      document.getElementById('zoneTweakModal').classList.add('open');
+      document.querySelectorAll('#zoneTweakModal [data-i18n]').forEach(el => {
+        el.textContent = t(el.getAttribute('data-i18n'));
+      });
+    }
+
+    function closeZoneTweakModal() {
+      _zoneTweakEditZoneId = null;
+      document.getElementById('zoneTweakModal').classList.remove('open');
+    }
+
+    async function saveZoneTweaks() {
+      if (!_zoneTweakEditZoneId) return;
+      const saveBtn = document.getElementById('saveZoneTweakBtn');
+      const prevLabel = saveBtn.textContent;
+      saveBtn.disabled = true;
+      saveBtn.textContent = t('tweak.saving');
+
+      const payload = {
+        entry_id: _lastData?.entries?.[0]?.entry_id,
+        zone_id: _zoneTweakEditZoneId,
+        zone_name: document.getElementById('tweak_zone_name')?.value?.trim(),
+        zone_switch_entity: document.getElementById('tweak_zone_switch_entity')?.value?.trim(),
+        zone_adjustment_percent: Number(document.getElementById('tweak_zone_adjustment_percent')?.value || 100),
+        zone_efficiency: Number(document.getElementById('tweak_zone_efficiency')?.value || 90),
+        zone_crop_coef: Number(document.getElementById('tweak_zone_crop_coef')?.value || 0.6),
+        zone_plant_density: Number(document.getElementById('tweak_zone_plant_density')?.value || 1.0),
+        zone_exposure_factor: Number(document.getElementById('tweak_zone_exposure_factor')?.value || 1.0),
+        zone_area: Number(document.getElementById('tweak_zone_area')?.value || 10),
+        zone_flow_rate: Number(document.getElementById('tweak_zone_flow_rate')?.value || 2),
+        zone_emitter_count: Number(document.getElementById('tweak_zone_emitter_count')?.value || 10),
+        zone_rain_threshold: Number(document.getElementById('tweak_zone_rain_threshold')?.value || 2.5),
+        zone_max_duration: Number(document.getElementById('tweak_zone_max_duration')?.value || 60),
+        zone_rain_factoring: document.getElementById('tweak_zone_rain_factoring')?.value === 'true',
+        zone_adaptive: document.getElementById('tweak_zone_adaptive')?.value === 'true',
+      };
+
+      try {
+        const resp = await fetch(API_BASE + '/zones/schedule', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify(payload)
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+
+        showToast(t('toast.tweak_saved', { id: _zoneTweakEditZoneId }), 'success');
+        closeZoneTweakModal();
+        await loadData();
+      } catch (err) {
+        showToast(t('toast.tweak_error') + ': ' + err.message, 'error');
       } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = prevLabel;
@@ -1703,6 +1861,7 @@
 
       // Zone cards
       let html = '';
+      const cycles = Math.max(1, Number(entry.cycles || 1));
       for (const zone of entry.zones) {
         const statusClass = !zone.enabled ? 'disabled' : zone.is_running ? 'running' : 'idle';
         const statusText = !zone.enabled ? t('zone.disabled') : zone.is_running ? t('zone.running') : t('zone.idle');
@@ -1718,16 +1877,17 @@
           ? `<div style="font-size:12px;color:var(--text-secondary);background:rgba(255,152,0,0.1);border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ ${translatedSkipReason}</div>`
           : '';
         const toggleBtn = zone.enabled
-          ? `<button class="btn btn-sm" style="background:rgba(244,67,54,0.15);color:var(--danger)" onclick="toggleZoneEnabled(${zone.zone_id}, false)">${t('btn.disable')}</button>`
-          : `<button class="btn btn-sm" style="background:rgba(76,175,80,0.15);color:var(--success)" onclick="toggleZoneEnabled(${zone.zone_id}, true)">${t('btn.enable')}</button>`;
-        const scheduleBtn = `<button class="btn btn-sm" style="background:rgba(33,150,243,0.16);color:var(--primary)" onclick="openZoneScheduleModal(${zone.zone_id})">${t('btn.schedule')}</button>`;
+          ? `<button class="btn btn-sm" style="background:rgba(244,67,54,0.15);color:var(--danger)" onclick="event.stopPropagation(); toggleZoneEnabled(${zone.zone_id}, false)">${t('btn.disable')}</button>`
+          : `<button class="btn btn-sm" style="background:rgba(76,175,80,0.15);color:var(--success)" onclick="event.stopPropagation(); toggleZoneEnabled(${zone.zone_id}, true)">${t('btn.enable')}</button>`;
+        const scheduleBtn = `<button class="btn btn-sm" style="background:rgba(33,150,243,0.16);color:var(--primary)" onclick="event.stopPropagation(); openZoneScheduleModal(${zone.zone_id})">${t('btn.schedule')}</button>`;
         const startStopBtn = zone.is_running
-          ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'stop')">${t('btn.stop')}</button>`
-          : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" value="${zone.duration > 0 ? Math.round(zone.duration) : 10}" min="1" max="180" title="${t('zone.duration')}">
-             <button class="btn btn-success btn-sm" id="btn_${zone.zone_id}" onclick="controlZone(${zone.zone_id}, 'start')" ${!zone.enabled ? 'disabled' : ''}>${t('btn.start')}</button>`;
+          ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="event.stopPropagation(); controlZone(${zone.zone_id}, 'stop')">${t('btn.stop')}</button>`
+          : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" onclick="event.stopPropagation()" value="${zone.duration > 0 ? Math.round(zone.duration) : 10}" min="1" max="180" title="${t('zone.duration')}">
+             <button class="btn btn-success btn-sm" id="btn_${zone.zone_id}" onclick="event.stopPropagation(); controlZone(${zone.zone_id}, 'start')" ${!zone.enabled ? 'disabled' : ''}>${t('btn.start')}</button>`;
+        const durationText = formatDurationWithCycles(zone.duration, cycles);
 
         html += `
-          <div class="card" id="zone_card_${zone.zone_id}">
+          <div class="card zone-clickable" id="zone_card_${zone.zone_id}" onclick="openZoneTweakModal(${zone.zone_id})">
             <div class="card-header">
               <span class="card-title">💧 ${zone.name}</span>
               ${statusBadge}
@@ -1739,12 +1899,13 @@
             </div>
             ${skipReasonHtml}
             <div class="info-grid">
-              <div class="info-item"><span class="info-label">${t('zone.duration')}</span><span class="info-value">${zone.duration > 0 ? zone.duration + ' min' : '–'}</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.duration')}</span><span class="info-value">${durationText}</span></div>
               <div class="info-item"><span class="info-label">${t('zone.eto_total')}</span><span class="info-value">${zone.eto_total} mm</span></div>
               <div class="info-item"><span class="info-label">${t('zone.rain_total')}</span><span class="info-value">${zone.rain_total} mm</span></div>
               <div class="info-item"><span class="info-label">${t('zone.water_needed')}</span><span class="info-value">${zone.water_needed} L</span></div>
               <div class="info-item"><span class="info-label">${t('zone.area')}</span><span class="info-value">${zone.area} m²</span></div>
               <div class="info-item"><span class="info-label">${t('zone.efficiency')}</span><span class="info-value">${zone.efficiency}%</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.adjustment')}</span><span class="info-value">${Number(zone.adjustment_percent || 100)}%</span></div>
               <div class="info-item"><span class="info-label">${t('zone.last_run')}</span><span class="info-value">${zone.last_run ? formatDate(zone.last_run) : '--'}</span></div>
               <div class="info-item"><span class="info-label">${t('zone.next_sched')}</span><span class="info-value">${(zone.enabled && zone.duration > 0 && entry.scheduled_run) ? formatDate(entry.scheduled_run) : '--'}</span></div>
             </div>
@@ -1952,6 +2113,7 @@
               <div class="backup-field"><label>zone_plant_density</label><input data-field="zone_plant_density" type="number" step="0.01" value="${_backupEscape(z.zone_plant_density)}"></div>
               <div class="backup-field"><label>zone_exposure_factor</label><input data-field="zone_exposure_factor" type="number" step="0.01" value="${_backupEscape(z.zone_exposure_factor)}"></div>
               <div class="backup-field"><label>zone_rain_factoring</label><select data-field="zone_rain_factoring"><option value="true" ${z.zone_rain_factoring ? 'selected' : ''}>true</option><option value="false" ${!z.zone_rain_factoring ? 'selected' : ''}>false</option></select></div>
+              <div class="backup-field"><label>zone_adjustment_percent</label><input data-field="zone_adjustment_percent" type="number" min="10" max="250" step="1" value="${_backupEscape(z.zone_adjustment_percent ?? 100)}"></div>
               <div class="backup-field"><label>zone_enabled</label><select data-field="zone_enabled"><option value="true" ${z.zone_enabled ? 'selected' : ''}>true</option><option value="false" ${!z.zone_enabled ? 'selected' : ''}>false</option></select></div>
               <div class="backup-field"><label>zone_adaptive</label><select data-field="zone_adaptive"><option value="true" ${z.zone_adaptive ? 'selected' : ''}>true</option><option value="false" ${!z.zone_adaptive ? 'selected' : ''}>false</option></select></div>
               <div class="backup-field" style="grid-column:1/-1"><label>zone_weekdays (comma separated)</label><input data-field="zone_weekdays" value="${_backupEscape((z.zone_weekdays || []).join(', '))}"></div>
@@ -2094,6 +2256,7 @@
         draft.zones[idx].zone_plant_density = Number(get('zone_plant_density')?.value || 1.0);
         draft.zones[idx].zone_exposure_factor = Number(get('zone_exposure_factor')?.value || 1.0);
         draft.zones[idx].zone_rain_factoring = get('zone_rain_factoring')?.value === 'true';
+        draft.zones[idx].zone_adjustment_percent = Number(get('zone_adjustment_percent')?.value || 100);
         draft.zones[idx].zone_enabled = get('zone_enabled')?.value === 'true';
         draft.zones[idx].zone_adaptive = get('zone_adaptive')?.value === 'true';
         draft.zones[idx].zone_weekdays = parseList(get('zone_weekdays')?.value).map(v => v.toLowerCase());

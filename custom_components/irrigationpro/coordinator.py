@@ -33,6 +33,7 @@ from .const import (
     CONF_USE_OWM,
     CONF_WEATHER_ENTITY,
     CONF_ZONE_ADAPTIVE,
+    CONF_ZONE_ADJUSTMENT_PERCENT,
     CONF_ZONE_AREA,
     CONF_ZONE_CROP_COEF,
     CONF_ZONE_EFFICIENCY,
@@ -50,6 +51,7 @@ from .const import (
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_LANGUAGE,
+    DEFAULT_ZONE_ADJUSTMENT_PERCENT,
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_DAILY_REPORT_ENABLED,
     DEFAULT_DAILY_REPORT_HOUR,
@@ -211,6 +213,7 @@ class ZoneData:
         self.max_duration = config.get(CONF_ZONE_MAX_DURATION, 60)
         self.rain_threshold = config.get(CONF_ZONE_RAIN_THRESHOLD, 2.5)
         self.rain_factoring = config.get(CONF_ZONE_RAIN_FACTORING, True)
+        self.adjustment_percent = config.get(CONF_ZONE_ADJUSTMENT_PERCENT, DEFAULT_ZONE_ADJUSTMENT_PERCENT)
         self.switch_entity = config.get(CONF_ZONE_SWITCH_ENTITY)
         # Use CONF keys for weekdays and months with proper defaults
         self.weekdays = config.get(CONF_ZONE_WEEKDAYS, WEEKDAYS)
@@ -560,6 +563,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             * zone.exposure_factor
             * zone.area
         )
+
+        # Apply user tweak factor (e.g. 110% for slightly more water)
+        water_needed = water_needed * max(10, float(zone.adjustment_percent)) / 100.0
         
         # Adjust for efficiency
         water_needed = water_needed * 100 / zone.efficiency

@@ -18,6 +18,7 @@ CONF_ZONE_EMITTER_COUNT: Final = "zone_emitter_count"
 CONF_ZONE_MAX_DURATION: Final = "zone_max_duration"
 CONF_ZONE_RAIN_THRESHOLD: Final = "zone_rain_threshold"
 CONF_ZONE_RAIN_FACTORING: Final = "zone_rain_factoring"
+CONF_ZONE_ADJUSTMENT_PERCENT: Final = "zone_adjustment_percent"
 CONF_ZONE_ENABLED: Final = "zone_enabled"
 CONF_ZONE_ADAPTIVE: Final = "zone_adaptive"
 CONF_ZONE_SWITCH_ENTITY: Final = "zone_switch_entity"
@@ -69,6 +70,7 @@ DEFAULT_ZONE_EMITTER_COUNT: Final = 10
 DEFAULT_ZONE_MAX_DURATION: Final = 60
 DEFAULT_ZONE_RAIN_THRESHOLD: Final = 2.5
 DEFAULT_ZONE_RAIN_FACTORING: Final = True
+DEFAULT_ZONE_ADJUSTMENT_PERCENT: Final = 100
 DEFAULT_ZONE_ENABLED: Final = True
 DEFAULT_ZONE_ADAPTIVE: Final = True
 
