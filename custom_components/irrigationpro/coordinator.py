@@ -229,6 +229,8 @@ class ZoneData:
         self.is_running = False
         self.started_at: datetime | None = None  # When the zone was last started
         self.skip_reason: str = ""  # Why this zone is not scheduled
+        self.duration_uncapped: float = 0.0  # Calculated duration before max_duration cap
+        self.days_until_next: int = 1  # Days of ETo accumulated for this calculation
 
 
 class SmartIrrigationCoordinator(DataUpdateCoordinator):
@@ -518,6 +520,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             if future_weekday in zone.weekdays:
                 days_until_next = future_day
                 break
+
+        zone.days_until_next = days_until_next
         
         # Calculate total ETo and rain until next watering
         eto_total = 0
@@ -571,41 +575,44 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         water_needed = water_needed * 100 / zone.efficiency
         
         zone.water_needed = water_needed
-        
+
         # Calculate duration in minutes
         # Water needed is in liters (mm * m² = liters)
         # Flow rate is in L/h per emitter
         total_flow_rate = zone.flow_rate * zone.emitter_count  # L/h
-        
+
         if total_flow_rate > 0:
             duration = (water_needed * 60) / total_flow_rate  # minutes
         else:
             duration = 0
-        
+
+        zone.duration_uncapped = duration  # save before max_duration cap
+
         # Limit to max duration
-        if duration > zone.max_duration:
-            _LOGGER.debug(
-                "Zone '%s': Limiting duration from %.1f to %.1f minutes",
-                zone.name,
-                duration,
-                zone.max_duration,
-            )
+        capped = duration > zone.max_duration
+        if capped:
             duration = zone.max_duration
-        
+
         if duration == 0:
             zone.skip_reason = self._txt("no_water_needed")
         else:
             zone.skip_reason = ""
-        
-        _LOGGER.debug(
-            "Zone '%s': ETo=%.2f mm, Rain=%.2f mm, Water needed=%.2f L, Duration=%.1f min",
+
+        _LOGGER.info(
+            "Zone '%s': ETo=%.2f mm (%d Tage), Regen=%.2f mm, Bedarf=%.1f L, "
+            "Dauer=%.1f%s min/Zyklus [flow=%.1f L/h, effiz=%d%%, adapt=%s]",
             zone.name,
             eto_total,
+            days_until_next,
             rain_total,
             water_needed,
             duration,
+            f" (begrenzt, unkappiert={zone.duration_uncapped:.1f})" if capped else "",
+            total_flow_rate,
+            zone.efficiency,
+            zone.adaptive,
         )
-        
+
         return duration
 
     async def _check_schedule(self, now):

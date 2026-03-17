@@ -971,6 +971,9 @@
         'zone.next_sched': 'Nächste Bewässerung',
         'zone.adjustment': 'Anpassung',
         'zone.duration_split': '{total} min ({cycles}x{per}min)',
+          'zone.eto_days': 'ETo-Zeitraum',
+          'zone.capped_hint': '⚠️ Max-Grenze ({max}min/Zyklus) erreicht – Bedarf wäre {uncapped}min/Zyklus',
+          'zone.non_adaptive': 'Nicht-adaptiv (feste Dauer)',
         'zone.last_calc': 'Letzte Berechnung',
         'zone.next_auto_calc': 'Nächste automatische Berechnung',
         'zone.recheck': 'Nächster Recheck',
@@ -1115,6 +1118,9 @@
         'zone.next_sched': 'Next Watering',
         'zone.adjustment': 'Adjustment',
         'zone.duration_split': '{total} min ({cycles}x{per}min)',
+          'zone.eto_days': 'ETo period',
+          'zone.capped_hint': '⚠️ Max limit ({max}min/cycle) reached – demand would be {uncapped}min/cycle',
+          'zone.non_adaptive': 'Non-adaptive (fixed duration)',
         'zone.last_calc': 'Last Calculation',
         'zone.next_auto_calc': 'Next Automatic Calculation',
         'zone.recheck': 'Next Recheck',
@@ -1239,7 +1245,7 @@
       }
     };
 
-    const UI_VERSION = '1.4.17';
+    const UI_VERSION = '1.4.18';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1891,7 +1897,17 @@
           ? `<button class="btn btn-danger btn-sm" id="btn_${zone.zone_id}" onclick="event.stopPropagation(); controlZone(${zone.zone_id}, 'stop')">${t('btn.stop')}</button>`
           : `<input type="number" class="duration-input" id="dur_${zone.zone_id}" onclick="event.stopPropagation()" value="${zone.duration > 0 ? Math.round(zone.duration) : 10}" min="1" max="180" title="${t('zone.duration')}">
              <button class="btn btn-success btn-sm" id="btn_${zone.zone_id}" onclick="event.stopPropagation(); controlZone(${zone.zone_id}, 'start')" ${!zone.enabled ? 'disabled' : ''}>${t('btn.start')}</button>`;
-        const durationText = formatDurationWithCycles(zone.duration, cycles);
+        const isCapped = zone.adaptive && Number(zone.duration_uncapped || 0) > Number(zone.max_duration || 0);
+        const cappedWarning = isCapped
+          ? `<span title="${t('zone.capped_hint', { max: zone.max_duration, uncapped: Math.round(Number(zone.duration_uncapped || 0) * 10) / 10 })}" style="cursor:help;color:var(--warning,#FF9800)"> ⚠️</span>`
+          : '';
+        const nonAdaptiveNote = !zone.adaptive
+          ? `<span title="${t('zone.non_adaptive')}" style="cursor:help;color:var(--text-secondary)"> ℹ️</span>`
+          : '';
+        const durationText = formatDurationWithCycles(zone.duration, cycles) + cappedWarning + nonAdaptiveNote;
+        const daysLabel = Number(zone.days_until_next || 1) === 1
+          ? (lang === 'de' ? '1 Tag' : '1 day')
+          : `${zone.days_until_next} ${lang === 'de' ? 'Tage' : 'days'}`;
 
         html += `
           <div class="card zone-clickable" id="zone_card_${zone.zone_id}" onclick="openZoneTweakModal(${zone.zone_id})">
@@ -1907,7 +1923,7 @@
             ${skipReasonHtml}
             <div class="info-grid">
               <div class="info-item"><span class="info-label">${t('zone.duration')}</span><span class="info-value">${durationText}</span></div>
-              <div class="info-item"><span class="info-label">${t('zone.eto_total')}</span><span class="info-value">${zone.eto_total} mm</span></div>
+              <div class="info-item"><span class="info-label">${t('zone.eto_total')}</span><span class="info-value">${zone.eto_total} mm <small style="color:var(--text-secondary)">(${daysLabel})</small></span></div>
               <div class="info-item"><span class="info-label">${t('zone.rain_total')}</span><span class="info-value">${zone.rain_total} mm</span></div>
               <div class="info-item"><span class="info-label">${t('zone.water_needed')}</span><span class="info-value">${zone.water_needed} L</span></div>
               <div class="info-item"><span class="info-label">${t('zone.area')}</span><span class="info-value">${zone.area} m²</span></div>

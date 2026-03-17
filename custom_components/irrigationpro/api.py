@@ -458,6 +458,8 @@ class IrrigationProApiView(HomeAssistantView):
                         "entity_state": entity_state,
                         "duration": round(zone.duration, 1),
                         "eto_total": round(zone.eto_total, 2),
+                        "duration_uncapped": round(zone.duration_uncapped, 1),
+                        "days_until_next": getattr(zone, "days_until_next", 1),
                         "rain_total": round(zone.rain_total, 2),
                         "water_needed": round(zone.water_needed, 2),
                         "area": zone.area,
