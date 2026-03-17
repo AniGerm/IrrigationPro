@@ -153,6 +153,7 @@ _TEXT = {
         "next_extra_recalc": "Nächste zusätzliche Neuberechnung:\n{when}\n(zusätzlich zum regulären Update alle {minutes} Minuten)",
         "no_extra_recalc_today": "Keine zusätzliche Neuberechnung für heute geplant.\nAutomatische Neuplanung beim nächsten Wetter-Update (alle {minutes} Minuten).",
         "no_schedule_set": "Kein Zeitplan gesetzt",
+        "weather_unavailable": "⚠️ Wetter-Entität nicht verfügbar – Retry alle 2 min. Prüfe die Konfiguration.",
         "manual_zone_started": "Zone «{zone}» manuell gestartet\nGeplante Dauer: {duration} min.",
         "manual_zone_stopped": "Zone «{zone}» beendet\nLaufzeit: {duration} min.\nStart: {start}\nEnde:  {end}",
         "watering_error": "Fehler beim Bewässern: {error}",
@@ -186,6 +187,7 @@ _TEXT = {
         "next_extra_recalc": "Next additional recalculation:\n{when}\n(in addition to the regular update every {minutes} minutes)",
         "no_extra_recalc_today": "No additional recalculation planned for today.\nAutomatic replanning at the next weather update (every {minutes} minutes).",
         "no_schedule_set": "No schedule set",
+        "weather_unavailable": "⚠️ Weather entity not available – retrying every 2 min. Check configuration.",
         "manual_zone_started": "Zone «{zone}» started manually\nPlanned duration: {duration} min.",
         "manual_zone_stopped": "Zone «{zone}» finished\nRuntime: {duration} min.\nStart: {start}\nEnd:   {end}",
         "watering_error": "Watering error: {error}",
@@ -257,6 +259,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._storage: Store | None = None
         self._schedule_checker_unsub = None
         self.schedule_reason: str = ""  # Why no watering is scheduled
+        self.weather_status: str = "ok"  # ok | unavailable | error
         self.history: list[dict] = []  # Irrigation & skip history (max 180 entries)
         self.last_calculated: datetime | None = None  # When the schedule was last calculated
         self.last_refresh_time: datetime | None = None  # Last successful coordinator refresh
@@ -335,17 +338,23 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             # Get weather forecast – a missing/unavailable entity must not block startup
             try:
                 self.forecast = await self.weather_provider.async_get_forecast(days=8)
+                self.weather_status = "ok"
             except (ValueError, Exception) as weather_err:
                 _LOGGER.warning(
-                    "Weather data not available (%s) – integration will start without "
-                    "forecast. Check that the weather entity is configured correctly.",
+                    "Weather data not available (%s) – will retry in 2 min. "
+                    "Available weather entities: %s",
                     weather_err,
+                    ", ".join(sorted(self.hass.states.async_entity_ids("weather"))) or "none",
                 )
                 self.forecast = []
+                self.weather_status = "unavailable"
 
             if not self.forecast:
+                # Retry much sooner than the normal 60-min interval
+                self.update_interval = timedelta(minutes=2)
+                self.schedule_reason = self._txt("weather_unavailable")
                 _LOGGER.warning(
-                    "No forecast data available – skipping ETo calculation. "
+                    "No forecast data – scheduling retry in 2 min. "
                     "Watering will not be scheduled until weather data is available."
                 )
                 return {
@@ -353,6 +362,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     "zones": self.zones,
                     "scheduled_run": self.scheduled_run,
                 }
+
+            # Weather is available – restore normal update interval
+            self.update_interval = timedelta(minutes=UPDATE_INTERVAL_MINUTES)
             
             # Calculate ETo for each forecast day
             lat = self.hass.config.latitude

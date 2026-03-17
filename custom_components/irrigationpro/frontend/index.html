@@ -1012,6 +1012,7 @@
         'loading.data': 'Lade Daten...',
         'loading.forecast': 'Lade...',
         'loading.no_instance': 'Keine IrrigationPro-Instanz konfiguriert',
+        'weather.unavailable': '⚠️ <b>Wetter-Entität nicht verfügbar!</b><br>Konfiguriert: <code>{entity}</code><br>Verfügbare Wetter-Entitäten: <code>{available}</code><br>Bitte prüfe unter <em>Einstellungen → Geräte & Dienste → IrrigationPro → Konfigurieren</em> ob die richtige Entität eingetragen ist. Retry alle 2 min.',
         'date.today': 'Heute',
         'date.tomorrow': 'Morgen',
         'forecast.title': '📊 Wettervorhersage & ETo-Berechnung',
@@ -1173,6 +1174,7 @@
         'loading.data': 'Loading...',
         'loading.forecast': 'Loading...',
         'loading.no_instance': 'No IrrigationPro instance configured',
+        'weather.unavailable': '⚠️ <b>Weather entity not available!</b><br>Configured: <code>{entity}</code><br>Available weather entities: <code>{available}</code><br>Check under <em>Settings → Devices & Services → IrrigationPro → Configure</em> that the correct entity is set. Retrying every 2 min.',
         'date.today': 'Today',
         'date.tomorrow': 'Tomorrow',
         'forecast.title': '📊 Weather Forecast & ETo Calculation',
@@ -1295,7 +1297,7 @@
       }
     };
 
-    const UI_VERSION = '1.4.20';
+    const UI_VERSION = '1.4.21';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1898,6 +1900,23 @@
       }
 
       const entry = data.entries[0];
+
+      // Weather status warning
+      let weatherBanner = document.getElementById('weatherBanner');
+      if (!weatherBanner) {
+        weatherBanner = document.createElement('div');
+        weatherBanner.id = 'weatherBanner';
+        weatherBanner.style.cssText = 'padding:10px 14px;margin-bottom:12px;border-radius:10px;font-size:13px;line-height:1.6;display:none;background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.35);color:var(--text)';
+        document.getElementById('zonesContainer').parentNode.insertBefore(weatherBanner, document.getElementById('zonesContainer'));
+      }
+      if (entry.weather_status && entry.weather_status !== 'ok') {
+        const cfgEntity = entry.weather_entity || '?';
+        const available = (entry.available_weather_entities || []).join(', ') || (lang === 'de' ? 'keine gefunden' : 'none found');
+        weatherBanner.innerHTML = t('weather.unavailable', {entity: cfgEntity, available: available});
+        weatherBanner.style.display = 'block';
+      } else {
+        weatherBanner.style.display = 'none';
+      }
 
       document.getElementById('nextScheduled').textContent =
         entry.scheduled_run ? formatDate(entry.scheduled_run) : t('no_scheduled');

@@ -585,6 +585,11 @@ class IrrigationProApiView(HomeAssistantView):
                     if next_automatic_calculation
                     else None
                 ),
+                "weather_status": getattr(coordinator, "weather_status", "ok"),
+                "weather_entity": coordinator.entry.data.get(CONF_WEATHER_ENTITY, ""),
+                "available_weather_entities": sorted(
+                    list(hass.states.async_entity_ids("weather"))
+                ),
             }
             result["entries"].append(entry_data)
 
