@@ -50,6 +50,7 @@ from .const import (
     CONF_ZONE_SWITCH_ENTITY,
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
+    DEFAULT_CYCLES,
     DEFAULT_LANGUAGE,
     DEFAULT_ZONE_ADJUSTMENT_PERCENT,
     DEFAULT_SOLAR_RADIATION,
@@ -582,13 +583,17 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         total_flow_rate = zone.flow_rate * zone.emitter_count  # L/h
 
         if total_flow_rate > 0:
-            duration = (water_needed * 60) / total_flow_rate  # minutes
+            duration = (water_needed * 60) / total_flow_rate  # minutes for ALL water in one pass
         else:
             duration = 0
 
-        zone.duration_uncapped = duration  # save before max_duration cap
+        # Divide by cycles: each cycle delivers 1/N of the total water (cycle-and-soak principle)
+        cycles = max(1, int(self.entry.data.get(CONF_CYCLES, DEFAULT_CYCLES)))
+        duration = duration / cycles
 
-        # Limit to max duration
+        zone.duration_uncapped = duration  # per-cycle duration before max_duration cap
+
+        # Limit to max duration per cycle
         capped = duration > zone.max_duration
         if capped:
             duration = zone.max_duration
@@ -600,7 +605,7 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
         _LOGGER.info(
             "Zone '%s': ETo=%.2f mm (%d Tage), Regen=%.2f mm, Bedarf=%.1f L, "
-            "Dauer=%.1f%s min/Zyklus [flow=%.1f L/h, effiz=%d%%, adapt=%s]",
+            "Dauer=%.1f%s min/Zyklus x%d [flow=%.1f L/h, effiz=%d%%]",
             zone.name,
             eto_total,
             days_until_next,
@@ -608,9 +613,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             water_needed,
             duration,
             f" (begrenzt, unkappiert={zone.duration_uncapped:.1f})" if capped else "",
+            cycles,
             total_flow_rate,
             zone.efficiency,
-            zone.adaptive,
         )
 
         return duration
