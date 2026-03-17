@@ -1219,7 +1219,7 @@
       }
     };
 
-    const UI_VERSION = '1.4.15';
+    const UI_VERSION = '1.4.16';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1240,33 +1240,12 @@
       if (vb) vb.textContent = `UI ${UI_VERSION}`;
     }
 
-    async function persistLanguage(nextLang) {
-      const entryId = _lastData?.entries?.[0]?.entry_id;
-      const resp = await fetch(API_BASE + '/settings/language', {
-        method: 'POST',
-        headers: await authHeaders(),
-        body: JSON.stringify({ language: nextLang, entry_id: entryId })
-      });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return resp.json();
-    }
-
     async function toggleLang() {
-      const previous = lang;
       const next = lang === 'de' ? 'en' : 'de';
       lang = next;
       localStorage.setItem('irrigationpro_lang', lang);
       applyI18n();
       if (_lastData) renderData(_lastData);
-      try {
-        await persistLanguage(next);
-      } catch (err) {
-        lang = previous;
-        localStorage.setItem('irrigationpro_lang', lang);
-        applyI18n();
-        if (_lastData) renderData(_lastData);
-        showToast((lang === 'de' ? 'Fehler beim Speichern der Sprache: ' : 'Failed to save language: ') + err.message, 'error');
-      }
     }
 
     let _lastData = null;
@@ -1538,9 +1517,13 @@
 
       const grid = document.getElementById('zoneTweakGrid');
       const adjustment = Number(zone.adjustment_percent ?? 100);
+      const switchEntities = entry.switch_entities || [];
+      const switchEntityOptions = switchEntities
+        .map(e => `<option value="${_backupEscape(e)}"></option>`)
+        .join('');
       grid.innerHTML = `
         <div class="backup-field"><label>zone_name</label><input id="tweak_zone_name" value="${_backupEscape(zone.name || '')}"></div>
-        <div class="backup-field"><label>zone_switch_entity</label><input id="tweak_zone_switch_entity" value="${_backupEscape(zone.switch_entity || '')}"></div>
+        <div class="backup-field"><label>zone_switch_entity</label><input id="tweak_zone_switch_entity" list="tweakZoneSwitchEntities" value="${_backupEscape(zone.switch_entity || '')}"><datalist id="tweakZoneSwitchEntities">${switchEntityOptions}</datalist></div>
         <div class="backup-field"><label>zone_adjustment_percent</label><input id="tweak_zone_adjustment_percent" type="number" min="10" max="250" step="1" value="${adjustment}"><small>${t('zone.adjustment')} 100% = Standard</small></div>
         <div class="backup-field"><label>zone_efficiency</label><input id="tweak_zone_efficiency" type="number" min="1" max="100" step="1" value="${Number(zone.efficiency ?? 90)}"></div>
         <div class="backup-field"><label>zone_crop_coef</label><input id="tweak_zone_crop_coef" type="number" min="0.01" step="0.01" value="${Number(zone.crop_coef ?? 0.6)}"></div>
@@ -1788,12 +1771,6 @@
         hideAuthBanner();
 
         const data = await resp.json();
-        const backendLang = data.entries?.[0]?.language;
-        if (backendLang && backendLang !== lang) {
-          lang = backendLang;
-          localStorage.setItem('irrigationpro_lang', lang);
-          applyI18n();
-        }
         _lastData = data;
         renderData(data);
 

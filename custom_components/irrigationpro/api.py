@@ -545,6 +545,13 @@ class IrrigationProApiView(HomeAssistantView):
                 "entry_id": entry_id,
                 "language": coordinator.entry.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
                 "cycles": int(coordinator.entry.data.get(CONF_CYCLES, DEFAULT_CYCLES)),
+                "switch_entities": sorted(
+                    list(
+                        set(hass.states.async_entity_ids("switch"))
+                        | set(hass.states.async_entity_ids("light"))
+                        | set(hass.states.async_entity_ids("valve"))
+                    )
+                ),
                 "current_month": month_now,
                 "current_month_solar_radiation": round(float(solar_month_val), 2) if solar_month_val is not None else None,
                 "solar_radiation": solar_all,
