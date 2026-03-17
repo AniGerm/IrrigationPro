@@ -888,6 +888,33 @@
     </div>
   </div>
 
+  <!-- Temperature Threshold Editor Modal -->
+  <div class="modal-backdrop" id="tempModal" onclick="if(event.target===this)closeTemperatureModal()">
+    <div class="modal" style="max-width:560px">
+      <button class="modal-close" onclick="closeTemperatureModal()">✕</button>
+      <div class="modal-title" data-i18n="temp.title">🌡 Temperaturschwellen (min/max)</div>
+      <div class="modal-section">
+        <p data-i18n="temp.desc" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Bewässerung wird nur freigegeben, wenn beide Temperaturbedingungen erfüllt sind.</p>
+        <div class="backup-grid" style="grid-template-columns:1fr 1fr;gap:10px">
+          <div class="backup-field">
+            <label data-i18n="temp.low_label">Minimale Nachttemperatur (°C)</label>
+            <input id="temp_low_threshold" type="number" step="1" min="-20" max="40" value="5">
+            <small data-i18n="temp.low_help">Wenn die vorhergesagte Tages-Minimumtemperatur darunter liegt, wird nicht bewässert.</small>
+          </div>
+          <div class="backup-field">
+            <label data-i18n="temp.high_label">Minimale Tagesspitze (°C)</label>
+            <input id="temp_high_threshold" type="number" step="1" min="-20" max="50" value="15">
+            <small data-i18n="temp.high_help">Wenn die vorhergesagte Tages-Maximaltemperatur darunter liegt, wird nicht bewässert.</small>
+          </div>
+        </div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" onclick="closeTemperatureModal()" data-i18n="sched.cancel">Abbrechen</button>
+          <button class="btn btn-primary btn-sm" id="saveTempBtn" onclick="saveTemperatureThresholds()" data-i18n="temp.save">💾 Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Zone Tweak Modal -->
   <div class="modal-backdrop" id="zoneTweakModal" onclick="if(event.target===this)closeZoneTweakModal()">
     <div class="modal" style="max-width:920px;width:95%">
@@ -940,6 +967,10 @@
       <span class="status-label" data-i18n="status.month_value">Monatswert (Solar)</span>
       <span class="status-value" id="monthSolarValue" style="text-decoration:underline dotted">--</span>
     </div>
+    <div class="status-item" style="cursor:pointer" onclick="openTemperatureModal()" title="🌡 Temperaturschwellen bearbeiten">
+      <span class="status-label" data-i18n="status.temp_threshold">Temperaturschwelle</span>
+      <span class="status-value" id="tempThresholdValue" style="text-decoration:underline dotted">--</span>
+    </div>
   </div>
 
   <div class="grid" id="zonesContainer">
@@ -980,6 +1011,7 @@
         'status.active_zones': 'Aktive Zonen',
         'status.last_update': 'Letztes Update',
         'status.month_value': 'Monatswert (Solar)',
+        'status.temp_threshold': 'Temperaturschwelle',
         'zone.disabled': 'Deaktiviert',
         'zone.running': '● Aktiv',
         'zone.idle': 'Bereit',
@@ -1111,6 +1143,19 @@
         'solar.saving': '⏳ Speichert…',
         'toast.solar_saved': '✅ Sonneneinstrahlung gespeichert',
         'toast.solar_error': 'Fehler beim Speichern der Sonneneinstrahlung',
+        'temp.title': '🌡 Temperaturschwellen (min/max)',
+        'temp.desc': 'Bewässerung wird nur gestartet, wenn beide Bedingungen erfüllt sind: Tages-Minimum >= Untergrenze und Tages-Maximum >= Obergrenze.',
+        'temp.low_label': 'Minimale Nachttemperatur (°C)',
+        'temp.high_label': 'Minimale Tagesspitze (°C)',
+        'temp.low_help': 'Liegt die Tages-Minimumtemperatur darunter, wird nicht bewässert.',
+        'temp.high_help': 'Liegt die Tages-Maximaltemperatur darunter, wird nicht bewässert.',
+        'temp.save': '💾 Speichern',
+        'temp.saving': '⏳ Speichert…',
+        'temp.adjust_now': 'Schwellen anpassen',
+        'temp.value': '{low}/{high}°C',
+        'toast.temp_saved': '✅ Temperaturschwellen gespeichert',
+        'toast.temp_error': 'Fehler beim Speichern der Temperaturschwellen',
+        'reason.temp_threshold': 'Zu kalt für Bewässerung: gemessen min {min}°C / max {max}°C. Erforderlich sind mindestens {low}°C (Nachtminimum) und {high}°C (Tagesmaximum).',
         'no_scheduled': 'Nicht geplant',
         'hist.title': '🗓️ Bewässerungs-Historie',
         'hist.calendar_range': 'Kalenderübersicht',
@@ -1142,6 +1187,7 @@
         'status.active_zones': 'Active Zones',
         'status.last_update': 'Last Update',
         'status.month_value': 'Monthly value (solar)',
+        'status.temp_threshold': 'Temperature threshold',
         'zone.disabled': 'Disabled',
         'zone.running': '● Active',
         'zone.idle': 'Ready',
@@ -1273,6 +1319,19 @@
         'solar.saving': '⏳ Saving…',
         'toast.solar_saved': '✅ Solar radiation saved',
         'toast.solar_error': 'Failed to save solar radiation',
+        'temp.title': '🌡 Temperature thresholds (min/max)',
+        'temp.desc': 'Watering starts only when both conditions are met: daily minimum >= lower limit and daily maximum >= upper limit.',
+        'temp.low_label': 'Minimum nighttime temperature (°C)',
+        'temp.high_label': 'Minimum daytime peak (°C)',
+        'temp.low_help': 'If the daily minimum temperature is below this value, watering is skipped.',
+        'temp.high_help': 'If the daily maximum temperature is below this value, watering is skipped.',
+        'temp.save': '💾 Save',
+        'temp.saving': '⏳ Saving…',
+        'temp.adjust_now': 'Adjust thresholds',
+        'temp.value': '{low}/{high}°C',
+        'toast.temp_saved': '✅ Temperature thresholds saved',
+        'toast.temp_error': 'Failed to save temperature thresholds',
+        'reason.temp_threshold': 'Too cold for watering: measured min {min}°C / max {max}°C. Required: at least {low}°C (night minimum) and {high}°C (daytime maximum).',
         'no_scheduled': 'Not scheduled',
         'hist.title': '🗓️ Irrigation History',
         'hist.calendar_range': 'Calendar Overview',
@@ -1297,7 +1356,7 @@
       }
     };
 
-    const UI_VERSION = '1.4.21';
+    const UI_VERSION = '1.4.22';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1693,8 +1752,30 @@
       }
     }
 
+    function isTemperatureReason(reason) {
+      const txt = String(reason || '');
+      return /Temperatur zu niedrig|Temperature too low/i.test(txt);
+    }
+
     function translateBackendReason(reason) {
       if (!reason) return reason;
+
+      let tempMatch = String(reason).match(
+        /(?:Temperatur zu niedrig|Temperature too low) \(min: ([\d.]+)°C, max: ([\d.]+)°C\s*[–-]\s*(?:Schwelle|threshold): ([\d.]+)\/([\d.]+)°C\)/i
+      );
+      if (!tempMatch) {
+        tempMatch = String(reason).match(
+          /(?:Temperatur zu niedrig|Temperature too low) \(min: ([\d.]+)°C, max: ([\d.]+)°C\s*[–-]\s*(?:Schwelle|threshold)\s*min>=\s*([\d.]+)°C\s*(?:und|and)\s*max>=\s*([\d.]+)°C\)/i
+        );
+      }
+      if (tempMatch) {
+        return t('reason.temp_threshold', {
+          min: tempMatch[1],
+          max: tempMatch[2],
+          low: tempMatch[3],
+          high: tempMatch[4],
+        });
+      }
 
       const normalizeWeekday = (value) => {
         const key = String(value || '').trim().toLowerCase();
@@ -1934,6 +2015,12 @@
           ? `${monthLabel}: ${Number(val).toFixed(2)} kWh/d`
           : '--';
       }
+      const tempThresholdEl = document.getElementById('tempThresholdValue');
+      if (tempThresholdEl) {
+        const low = Number(entry.low_threshold ?? 5);
+        const high = Number(entry.high_threshold ?? 15);
+        tempThresholdEl.textContent = t('temp.value', { low: String(low), high: String(high) });
+      }
 
       // Reason why no schedule
       let srEl = document.getElementById('scheduleReason');
@@ -1944,7 +2031,11 @@
         document.getElementById('statusBar').after(srEl);
       }
       if (!entry.scheduled_run && entry.schedule_reason) {
-        srEl.textContent = 'ℹ️ ' + translateBackendReason(entry.schedule_reason);
+        const translatedReason = translateBackendReason(entry.schedule_reason);
+        const actionBtn = isTemperatureReason(entry.schedule_reason)
+          ? ` <button class="btn btn-sm" style="margin-left:8px" onclick="openTemperatureModal()">${t('temp.adjust_now')}</button>`
+          : '';
+        srEl.innerHTML = `ℹ️ ${_backupEscape(translatedReason)}${actionBtn}`;
         srEl.style.display = 'block';
       } else {
         srEl.style.display = 'none';
@@ -2435,6 +2526,65 @@
 
     function closeSolarModal() {
       document.getElementById('solarModal').classList.remove('open');
+    }
+
+    function openTemperatureModal() {
+      const entry = _lastData?.entries?.[0];
+      const low = Number(entry?.low_threshold ?? 5);
+      const high = Number(entry?.high_threshold ?? 15);
+      const lowEl = document.getElementById('temp_low_threshold');
+      const highEl = document.getElementById('temp_high_threshold');
+      if (lowEl) lowEl.value = String(low);
+      if (highEl) highEl.value = String(high);
+      document.getElementById('tempModal').classList.add('open');
+      document.querySelectorAll('#tempModal [data-i18n]').forEach(el => {
+        el.textContent = t(el.getAttribute('data-i18n'));
+      });
+    }
+
+    function closeTemperatureModal() {
+      document.getElementById('tempModal').classList.remove('open');
+    }
+
+    async function saveTemperatureThresholds() {
+      const btn = document.getElementById('saveTempBtn');
+      const prevLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = t('temp.saving');
+
+      const low = Number(document.getElementById('temp_low_threshold')?.value || 5);
+      const high = Number(document.getElementById('temp_high_threshold')?.value || 15);
+
+      if (high < low) {
+        showToast(t('toast.temp_error') + ': high_threshold must be >= low_threshold', 'error');
+        btn.disabled = false;
+        btn.textContent = prevLabel;
+        return;
+      }
+
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const resp = await fetch(API_BASE + '/settings/temperature', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({
+            entry_id: entryId,
+            low_threshold: Math.round(low),
+            high_threshold: Math.round(high),
+          })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+        showToast(t('toast.temp_saved'), 'success');
+        closeTemperatureModal();
+        await loadData();
+      } catch (err) {
+        showToast(t('toast.temp_error') + ': ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevLabel;
+      }
     }
 
     async function saveSolarValues() {

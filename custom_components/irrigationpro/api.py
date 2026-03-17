@@ -547,6 +547,8 @@ class IrrigationProApiView(HomeAssistantView):
                 "entry_id": entry_id,
                 "language": coordinator.entry.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
                 "cycles": int(coordinator.entry.data.get(CONF_CYCLES, DEFAULT_CYCLES)),
+                "low_threshold": int(coordinator.entry.data.get(CONF_LOW_THRESHOLD, DEFAULT_LOW_THRESHOLD)),
+                "high_threshold": int(coordinator.entry.data.get(CONF_HIGH_THRESHOLD, DEFAULT_HIGH_THRESHOLD)),
                 "switch_entities": sorted(
                     list(
                         set(hass.states.async_entity_ids("switch"))
@@ -852,6 +854,49 @@ class IrrigationProSettingsSolarView(HomeAssistantView):
         return self.json({"status": "ok", "solar_radiation": {str(k): v for k, v in normalized.items()}})
 
 
+class IrrigationProSettingsTemperatureView(HomeAssistantView):
+    """API view to update temperature thresholds."""
+
+    url = "/api/irrigationpro/settings/temperature"
+    name = "api:irrigationpro:settings_temperature"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Persist low/high temperature thresholds in the config entry."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            data = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        entry_id = data.get("entry_id") if isinstance(data, dict) else None
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        low_raw = data.get("low_threshold") if isinstance(data, dict) else None
+        high_raw = data.get("high_threshold") if isinstance(data, dict) else None
+
+        low = _to_int(low_raw, coordinator.entry.data.get(CONF_LOW_THRESHOLD, DEFAULT_LOW_THRESHOLD))
+        high = _to_int(high_raw, coordinator.entry.data.get(CONF_HIGH_THRESHOLD, DEFAULT_HIGH_THRESHOLD))
+
+        # Keep thresholds in a practical range and ensure logical ordering.
+        low = max(-20, min(40, low))
+        high = max(-20, min(50, high))
+        if high < low:
+            return self.json({"error": "high_threshold must be >= low_threshold"}, status_code=400)
+
+        hass.config_entries.async_update_entry(
+            coordinator.entry,
+            data={
+                **coordinator.entry.data,
+                CONF_LOW_THRESHOLD: low,
+                CONF_HIGH_THRESHOLD: high,
+            },
+        )
+        return self.json({"status": "ok", "low_threshold": low, "high_threshold": high})
+
+
 class IrrigationProBackupExportView(HomeAssistantView):
     """API view to export current integration configuration as backup."""
 
@@ -1152,6 +1197,7 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(IrrigationProTestNotificationView)
     hass.http.register_view(IrrigationProSettingsLanguageView)
     hass.http.register_view(IrrigationProSettingsSolarView)
+    hass.http.register_view(IrrigationProSettingsTemperatureView)
     hass.http.register_view(IrrigationProBackupExportView)
     hass.http.register_view(IrrigationProBackupRestoreView)
     hass.http.register_view(IrrigationProBackupPrepareView)
