@@ -64,6 +64,14 @@ if HAS_HAP:
             self._homekit_durations: dict[int, int] = {}
             self._valve_services: dict[int, Any] = {}
 
+            # -- AccessoryInformation (shown in Apple Home → Geräteinfos) --
+            self.set_info_service(
+                manufacturer="IrrigationPro",
+                model="Smart Irrigation Controller",
+                serial_number="IRRIGPRO-001",
+                firmware_revision="2.1.2",
+            )
+
             # -- Primary IrrigationSystem service --
             irr = self.add_preload_service(
                 "IrrigationSystem", chars=["RemainingDuration"]
