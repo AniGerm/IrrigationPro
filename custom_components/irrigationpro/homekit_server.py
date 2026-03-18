@@ -221,6 +221,7 @@ class IrrigationProHomeKit:
         self.is_running = False
         self.xhm_uri: str | None = None  # X-HM:// URI for QR pairing
         self.last_error: str | None = None
+        self.suggested_port: int | None = None
         self.accessory_name: str = "IrrigationPro Sprinkler"
 
     def _is_port_available(self, port: int) -> bool:
@@ -234,6 +235,19 @@ class IrrigationProHomeKit:
                 if err.errno == errno.EADDRINUSE:
                     return False
                 return False
+
+    @staticmethod
+    def find_free_port(start: int, max_attempts: int = 50) -> int | None:
+        """Return the next free TCP port starting at *start*, or None."""
+        for candidate in range(start, start + max_attempts):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    s.bind(("", candidate))
+                    return candidate
+                except OSError:
+                    continue
+        return None
 
     # -- public ---------------------------------------------------------
 
@@ -249,9 +263,12 @@ class IrrigationProHomeKit:
             return
 
         if not self._is_port_available(self._port):
+            suggested = self.find_free_port(self._port + 1)
+            self.suggested_port: int | None = suggested
             self.last_error = (
-                f"Port {self._port} is already in use. "
-                "Please select a different HomeKit port."
+                f"Port {self._port} is already in use."
+                + (f" Suggested free port: {suggested}." if suggested else "")
+                + " Please select a different HomeKit port."
             )
             _LOGGER.error("Cannot start HomeKit – %s", self.last_error)
             return

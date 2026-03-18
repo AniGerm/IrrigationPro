@@ -974,7 +974,10 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
                 coordinator.homekit_server = hk
                 if not hk.is_running:
                     return self.json(
-                        {"error": hk.last_error or "HomeKit server failed to start"},
+                        {
+                            "error": hk.last_error or "HomeKit server failed to start",
+                            "suggested_port": getattr(hk, "suggested_port", None),
+                        },
                         status_code=500,
                     )
             except Exception as err:
