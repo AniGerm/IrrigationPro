@@ -12,7 +12,6 @@ import errno
 import logging
 import socket
 import threading
-import time
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
@@ -240,6 +239,8 @@ class IrrigationProHomeKit:
     def start(self) -> None:
         """Start the HAP driver in a daemon thread."""
         self.last_error = None
+        self._thread_error: Exception | None = None
+
         if not HAS_HAP:
             self.last_error = "HAP-python not installed"
             _LOGGER.error("Cannot start HomeKit – %s", self.last_error)
@@ -261,6 +262,19 @@ class IrrigationProHomeKit:
                 persist_file=self._persist_file,
                 pincode=self._pin_code.encode("ascii"),
             )
+
+            # Log the address HAP-python will actually bind to
+            try:
+                bind_addr = getattr(
+                    getattr(self._driver, "state", None), "address", None
+                )
+                if bind_addr:
+                    _LOGGER.info(
+                        "HomeKit driver will bind to %s:%s", bind_addr, self._port
+                    )
+            except Exception:
+                pass
+
             accessory = IrrigationSystemAccessory(
                 self._driver,
                 self.accessory_name,
@@ -278,29 +292,50 @@ class IrrigationProHomeKit:
                 _LOGGER.debug("Could not generate xhm_uri", exc_info=True)
                 self.xhm_uri = None
 
+            # Wrap driver.start() so thread exceptions are captured.
+            # driver.start() is blocking (runs an event loop); if it
+            # *returns*, something went wrong (crash or socket error).
+            crashed_event = threading.Event()
+
+            def _run_driver() -> None:
+                try:
+                    self._driver.start()
+                except Exception as ex:
+                    self._thread_error = ex
+                    _LOGGER.error("HAP driver thread crashed: %s", ex)
+                finally:
+                    crashed_event.set()
+
             self._thread = threading.Thread(
-                target=self._driver.start,
+                target=_run_driver,
                 daemon=True,
                 name="irrigationpro-hap",
             )
             self._thread.start()
-            # Give the HAP server a brief moment to initialize.
-            time.sleep(0.9)
-            if self._thread.is_alive():
+
+            # Wait up to 5 s.  driver.start() is blocking – if the event
+            # fires, it means start() returned (= error).  A timeout means
+            # start() is still running (= success).
+            crashed = crashed_event.wait(timeout=5.0)
+
+            if crashed or not self._thread.is_alive():
+                self.is_running = False
+                self.xhm_uri = None
+                if self._thread_error is not None:
+                    self.last_error = str(self._thread_error)
+                else:
+                    self.last_error = (
+                        f"HomeKit server thread died unexpectedly "
+                        f"on port {self._port}"
+                    )
+                _LOGGER.error("Failed to start HomeKit server: %s", self.last_error)
+            else:
                 self.is_running = True
                 _LOGGER.info(
                     "HomeKit server started on port %s (PIN: %s)",
                     self._port,
                     self._pin_code,
                 )
-            else:
-                self.is_running = False
-                self.xhm_uri = None
-                self.last_error = (
-                    self.last_error
-                    or f"HomeKit server did not bind to port {self._port}"
-                )
-                _LOGGER.error("Failed to start HomeKit server: %s", self.last_error)
         except Exception as err:
             self.last_error = str(err)
             _LOGGER.exception("Failed to start HomeKit server")
