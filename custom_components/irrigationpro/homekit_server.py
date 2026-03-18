@@ -216,6 +216,7 @@ class IrrigationProHomeKit:
         self._driver: Any | None = None
         self._thread: threading.Thread | None = None
         self.is_running = False
+        self.xhm_uri: str | None = None  # X-HM:// URI for QR pairing
 
     # -- public ---------------------------------------------------------
 
@@ -241,6 +242,14 @@ class IrrigationProHomeKit:
                 hass=self._hass,
             )
             self._driver.add_accessory(accessory)
+
+            # Generate the X-HM:// URI for QR code pairing
+            try:
+                self.xhm_uri = accessory.xhm_uri()
+                _LOGGER.info("HomeKit setup URI: %s", self.xhm_uri)
+            except Exception:
+                _LOGGER.debug("Could not generate xhm_uri", exc_info=True)
+                self.xhm_uri = None
 
             self._thread = threading.Thread(
                 target=self._driver.start,
@@ -268,4 +277,5 @@ class IrrigationProHomeKit:
             self._driver = None
         self._thread = None
         self.is_running = False
+        self.xhm_uri = None
         _LOGGER.info("HomeKit server stopped")

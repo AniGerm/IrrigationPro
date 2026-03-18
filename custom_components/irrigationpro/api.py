@@ -602,6 +602,7 @@ class IrrigationProApiView(HomeAssistantView):
                 "homekit_port": int(coordinator.entry.data.get(CONF_HOMEKIT_PORT, DEFAULT_HOMEKIT_PORT)),
                 "homekit_pin": str(coordinator.entry.data.get(CONF_HOMEKIT_PIN, DEFAULT_HOMEKIT_PIN)),
                 "homekit_running": getattr(coordinator.homekit_server, "is_running", False) if coordinator.homekit_server else False,
+                "homekit_xhm_uri": getattr(coordinator.homekit_server, "xhm_uri", None) if coordinator.homekit_server else None,
             }
             result["entries"].append(entry_data)
 
@@ -980,6 +981,45 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
         return self.json({"status": "ok", "homekit_enabled": enabled, "homekit_running": running, "port": port, "pin": pin})
 
 
+class IrrigationProHomeKitQRView(HomeAssistantView):
+    """Serve a QR code PNG for the HomeKit X-HM:// setup URI."""
+
+    url = "/api/irrigationpro/homekit/qrcode"
+    name = "api:irrigationpro:homekit_qrcode"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return QR-code PNG for the running HomeKit server setup URI."""
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id")
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return web.Response(status=404, text="No IrrigationPro instance")
+
+        hk = coordinator.homekit_server
+        if not hk or not hk.is_running or not hk.xhm_uri:
+            return web.Response(status=404, text="HomeKit server not running")
+
+        xhm_uri = hk.xhm_uri
+
+        def _generate_png() -> bytes:
+            import io
+            try:
+                import qrcode
+                img = qrcode.make(xhm_uri, box_size=8, border=2)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                return buf.getvalue()
+            except ImportError:
+                raise RuntimeError("qrcode library not available")
+
+        try:
+            png_data = await hass.async_add_executor_job(_generate_png)
+            return web.Response(body=png_data, content_type="image/png")
+        except RuntimeError as err:
+            return web.Response(status=500, text=str(err))
+
+
 class IrrigationProBackupExportView(HomeAssistantView):
     """API view to export current integration configuration as backup."""
 
@@ -1282,6 +1322,7 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(IrrigationProSettingsSolarView)
     hass.http.register_view(IrrigationProSettingsTemperatureView)
     hass.http.register_view(IrrigationProSettingsHomeKitView)
+    hass.http.register_view(IrrigationProHomeKitQRView)
     hass.http.register_view(IrrigationProBackupExportView)
     hass.http.register_view(IrrigationProBackupRestoreView)
     hass.http.register_view(IrrigationProBackupPrepareView)

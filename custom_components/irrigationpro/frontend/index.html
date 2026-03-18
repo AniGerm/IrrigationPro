@@ -942,6 +942,12 @@
           <div id="hk_status_box" style="padding:8px 12px;border-radius:6px;font-size:13px;background:var(--bg-elevated);display:none">
             <span id="hk_status_text"></span>
           </div>
+          <div id="hk_qr_box" style="text-align:center;padding:16px 0;display:none">
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px" data-i18n="hk.qr_hint">📱 Scanne diesen Code mit der Apple Home App:</p>
+            <img id="hk_qr_img" style="width:200px;height:200px;image-rendering:pixelated;border-radius:8px" alt="HomeKit QR Code">
+            <p style="font-size:14px;font-weight:600;margin-top:8px;letter-spacing:4px" id="hk_pin_display"></p>
+            <p style="font-size:12px;color:var(--text-secondary);margin-top:4px" id="hk_name_display"></p>
+          </div>
         </div>
         <div class="schedule-actions">
           <button class="btn btn-sm" onclick="closeHomeKitModal()" data-i18n="sched.cancel">Abbrechen</button>
@@ -1210,6 +1216,8 @@
         'hk.status_stopped': '⏹ HomeKit-Server gestoppt',
         'hk.status_off': 'HomeKit ist deaktiviert',
         'hk.pair_hint': '📱 Öffne Apple Home → Gerät hinzufügen → Code eingeben: {pin}',
+        'hk.qr_hint': '📱 Scanne diesen Code mit der Apple Home App:',
+        'hk.name': 'Gerätename in HomeKit: IrrigationPro Sprinkler',
         'toast.hk_saved': '✅ HomeKit-Einstellungen gespeichert',
         'toast.hk_error': 'Fehler beim Speichern der HomeKit-Einstellungen',
         'no_scheduled': 'Nicht geplant',
@@ -1401,6 +1409,8 @@
         'hk.status_stopped': '⏹ HomeKit server stopped',
         'hk.status_off': 'HomeKit is disabled',
         'hk.pair_hint': '📱 Open Apple Home → Add Accessory → Enter code: {pin}',
+        'hk.qr_hint': '📱 Scan this code with the Apple Home app:',
+        'hk.name': 'Device name in HomeKit: IrrigationPro Sprinkler',
         'toast.hk_saved': '✅ HomeKit settings saved',
         'toast.hk_error': 'Failed to save HomeKit settings',
         'no_scheduled': 'Not scheduled',
@@ -2684,6 +2694,23 @@
         } else {
           txt.textContent = t('hk.status_off');
           box.style.borderLeft = '3px solid var(--text-secondary)';
+        }
+
+        // QR code
+        const qrBox = document.getElementById('hk_qr_box');
+        if (entry.homekit_running && entry.homekit_xhm_uri) {
+          qrBox.style.display = 'block';
+          const qrImg = document.getElementById('hk_qr_img');
+          authHeaders().then(hdrs => {
+            fetch(API_BASE + '/homekit/qrcode', { headers: hdrs })
+              .then(r => r.blob())
+              .then(blob => { qrImg.src = URL.createObjectURL(blob); })
+              .catch(() => { qrBox.style.display = 'none'; });
+          });
+          document.getElementById('hk_pin_display').textContent = entry.homekit_pin || '246-35-790';
+          document.getElementById('hk_name_display').textContent = t('hk.name');
+        } else {
+          qrBox.style.display = 'none';
         }
       }
       document.getElementById('homekitModal').classList.add('open');
