@@ -11,10 +11,10 @@ import asyncio
 import errno
 import logging
 import socket
-import threading
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.components import zeroconf
 from homeassistant.util import dt as dt_util
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ if HAS_HAP:
         ) -> None:
             super().__init__(driver, display_name, **kwargs)
             self._coordinator = coordinator
-            self._hass_loop = hass.loop
+            self._hass = hass
             self._homekit_durations: dict[int, int] = {}
             self._valve_services: dict[int, Any] = {}
 
@@ -135,14 +135,12 @@ if HAS_HAP:
                     int(zone.duration * 60) if zone.duration > 0 else 600,
                 )
                 dur_min = max(1, dur_sec // 60)
-                asyncio.run_coroutine_threadsafe(
-                    self._coordinator.async_start_zone_manual(zone_id, dur_min),
-                    self._hass_loop,
+                self._hass.async_create_task(
+                    self._coordinator.async_start_zone_manual(zone_id, dur_min)
                 )
             else:
-                asyncio.run_coroutine_threadsafe(
-                    self._coordinator.async_stop_zone(zone_id),
-                    self._hass_loop,
+                self._hass.async_create_task(
+                    self._coordinator.async_stop_zone(zone_id)
                 )
 
         def _on_set_duration(self, zone_id: int, value: int) -> None:
@@ -216,7 +214,7 @@ class IrrigationProHomeKit:
         self._pin_code = pin_code
         self._persist_file = persist_file
         self._driver: Any | None = None
-        self._thread: threading.Thread | None = None
+        self._hap_task: asyncio.Task | None = None
         self.is_running = False
         self.xhm_uri: str | None = None  # X-HM:// URI for QR pairing
         self.last_error: str | None = None
@@ -236,10 +234,9 @@ class IrrigationProHomeKit:
 
     # -- public ---------------------------------------------------------
 
-    def start(self) -> None:
-        """Start the HAP driver in a daemon thread."""
+    async def async_start(self) -> None:
+        """Start the HAP driver asynchronously."""
         self.last_error = None
-        self._thread_error: Exception | None = None
 
         if not HAS_HAP:
             self.last_error = "HAP-python not installed"
@@ -257,10 +254,16 @@ class IrrigationProHomeKit:
             return
 
         try:
+            # Use Home Assistant's zeroconf instance for mDNS sharing!
+            # Otherwise we get network conflicts when pyhap creates its own zeroconf server.
+            async_zc = await zeroconf.async_get_async_instance(self._hass)
+
             self._driver = AccessoryDriver(
                 port=self._port,
                 persist_file=self._persist_file,
                 pincode=self._pin_code.encode("ascii"),
+                loop=self._hass.loop,
+                async_zeroconf_instance=async_zc,
             )
 
             # Log the address HAP-python will actually bind to
@@ -292,65 +295,29 @@ class IrrigationProHomeKit:
                 _LOGGER.debug("Could not generate xhm_uri", exc_info=True)
                 self.xhm_uri = None
 
-            # Wrap driver.start() so thread exceptions are captured.
-            # driver.start() is blocking (runs an event loop); if it
-            # *returns*, something went wrong (crash or socket error).
-            crashed_event = threading.Event()
-
-            def _run_driver() -> None:
-                try:
-                    self._driver.start()
-                except Exception as ex:
-                    self._thread_error = ex
-                    _LOGGER.error("HAP driver thread crashed: %s", ex)
-                finally:
-                    crashed_event.set()
-
-            self._thread = threading.Thread(
-                target=_run_driver,
-                daemon=True,
-                name="irrigationpro-hap",
+            # async_start() correctly links pyhap into Home Assistant's event loop
+            await self._driver.async_start()
+            self.is_running = True
+            
+            _LOGGER.info(
+                "HomeKit server started on port %s (PIN: %s)",
+                self._port,
+                self._pin_code,
             )
-            self._thread.start()
-
-            # Wait up to 5 s.  driver.start() is blocking – if the event
-            # fires, it means start() returned (= error).  A timeout means
-            # start() is still running (= success).
-            crashed = crashed_event.wait(timeout=5.0)
-
-            if crashed or not self._thread.is_alive():
-                self.is_running = False
-                self.xhm_uri = None
-                if self._thread_error is not None:
-                    self.last_error = str(self._thread_error)
-                else:
-                    self.last_error = (
-                        f"HomeKit server thread died unexpectedly "
-                        f"on port {self._port}"
-                    )
-                _LOGGER.error("Failed to start HomeKit server: %s", self.last_error)
-            else:
-                self.is_running = True
-                _LOGGER.info(
-                    "HomeKit server started on port %s (PIN: %s)",
-                    self._port,
-                    self._pin_code,
-                )
         except Exception as err:
             self.last_error = str(err)
             _LOGGER.exception("Failed to start HomeKit server")
             self.is_running = False
             self.xhm_uri = None
 
-    def stop(self) -> None:
+    async def async_stop(self) -> None:
         """Stop the HAP driver."""
         if self._driver is not None:
             try:
-                self._driver.stop()
+                await self._driver.async_stop()
             except Exception:
                 _LOGGER.exception("Error stopping HomeKit server")
             self._driver = None
-        self._thread = None
         self.is_running = False
         self.xhm_uri = None
         self.last_error = None

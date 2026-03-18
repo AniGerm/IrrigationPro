@@ -962,7 +962,7 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
                     return self.json({"error": "HAP-python not installed"}, status_code=500)
 
                 if coordinator.homekit_server:
-                    await hass.async_add_executor_job(coordinator.homekit_server.stop)
+                    await coordinator.homekit_server.async_stop()
 
                 hk = IrrigationProHomeKit(
                     hass, coordinator,
@@ -970,7 +970,7 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
                     pin_code=pin,
                     persist_file=hass.config.path("irrigationpro_homekit.state"),
                 )
-                await hass.async_add_executor_job(hk.start)
+                await hk.async_start()
                 coordinator.homekit_server = hk
                 if not hk.is_running:
                     return self.json(
@@ -982,7 +982,7 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
                 return self.json({"error": str(err)}, status_code=500)
 
         elif not enabled and coordinator.homekit_server and coordinator.homekit_server.is_running:
-            await hass.async_add_executor_job(coordinator.homekit_server.stop)
+            await coordinator.homekit_server.async_stop()
 
         running = getattr(coordinator.homekit_server, "is_running", False) if coordinator.homekit_server else False
         return self.json(

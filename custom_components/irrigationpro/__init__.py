@@ -108,7 +108,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         pin_code=entry.data.get(CONF_HOMEKIT_PIN, DEFAULT_HOMEKIT_PIN),
                         persist_file=hass.config.path("irrigationpro_homekit.state"),
                     )
-                    await hass.async_add_executor_job(hk.start)
+                    await hk.async_start()
                     coordinator.homekit_server = hk
                 else:
                     _LOGGER.warning("HomeKit enabled but HAP-python not installed")
@@ -136,7 +136,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Stop HomeKit server
         if coordinator.homekit_server:
-            await hass.async_add_executor_job(coordinator.homekit_server.stop)
+            await coordinator.homekit_server.async_stop()
 
         # Cancel any scheduled jobs
         await coordinator.async_shutdown()
