@@ -85,7 +85,10 @@ if HAS_HAP:
                         "IsConfigured",
                         "Name",
                     ],
+                    unique_id=f"zone-{zone.zone_id}",
                 )
+                # Set service display_name so Apple Home shows the zone name
+                valve.display_name = zone.name
                 valve.configure_char("ValveType", value=1)  # 1 = IRRIGATION
                 valve.configure_char(
                     "IsConfigured", value=1 if zone.enabled else 0

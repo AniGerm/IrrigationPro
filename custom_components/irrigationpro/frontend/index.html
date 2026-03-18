@@ -1437,7 +1437,7 @@
       }
     };
 
-    const UI_VERSION = '2.0.0';
+    const UI_VERSION = '2.1.0';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -2761,6 +2761,11 @@
         if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
         showToast(t('toast.hk_saved'), 'success');
         closeHomeKitModal();
+        // Fast-poll for 12 s so the UI immediately picks up the new HomeKit state
+        _setRefreshInterval(2000);
+        setTimeout(() => {
+          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(30000);
+        }, 12000);
         await loadData();
       } catch (err) {
         showToast(t('toast.hk_error') + ': ' + err.message, 'error');
