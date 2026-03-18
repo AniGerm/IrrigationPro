@@ -2689,7 +2689,9 @@
           txt.innerHTML = t('hk.status_running', {port: entry.homekit_port}) + '<br>' + t('hk.pair_hint', {pin: entry.homekit_pin});
           box.style.borderLeft = '3px solid var(--color-success)';
         } else if (entry.homekit_enabled) {
-          txt.textContent = t('hk.status_stopped');
+          txt.textContent = entry.homekit_error
+            ? (t('hk.status_stopped') + ' - ' + entry.homekit_error)
+            : t('hk.status_stopped');
           box.style.borderLeft = '3px solid var(--color-warning)';
         } else {
           txt.textContent = t('hk.status_off');
@@ -2701,14 +2703,16 @@
         if (entry.homekit_running && entry.homekit_xhm_uri) {
           qrBox.style.display = 'block';
           const qrImg = document.getElementById('hk_qr_img');
+          const entryId = _lastData?.entries?.[0]?.entry_id;
           authHeaders().then(hdrs => {
-            fetch(API_BASE + '/homekit/qrcode', { headers: hdrs })
+            const url = API_BASE + '/homekit/qrcode' + (entryId ? ('?entry_id=' + encodeURIComponent(entryId)) : '');
+            fetch(url, { headers: hdrs })
               .then(r => r.blob())
               .then(blob => { qrImg.src = URL.createObjectURL(blob); })
               .catch(() => { qrBox.style.display = 'none'; });
           });
           document.getElementById('hk_pin_display').textContent = entry.homekit_pin || '246-35-790';
-          document.getElementById('hk_name_display').textContent = t('hk.name');
+          document.getElementById('hk_name_display').textContent = (entry.homekit_name || 'IrrigationPro Sprinkler');
         } else {
           qrBox.style.display = 'none';
         }

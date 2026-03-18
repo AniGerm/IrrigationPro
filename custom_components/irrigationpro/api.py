@@ -603,6 +603,8 @@ class IrrigationProApiView(HomeAssistantView):
                 "homekit_pin": str(coordinator.entry.data.get(CONF_HOMEKIT_PIN, DEFAULT_HOMEKIT_PIN)),
                 "homekit_running": getattr(coordinator.homekit_server, "is_running", False) if coordinator.homekit_server else False,
                 "homekit_xhm_uri": getattr(coordinator.homekit_server, "xhm_uri", None) if coordinator.homekit_server else None,
+                "homekit_error": getattr(coordinator.homekit_server, "last_error", None) if coordinator.homekit_server else None,
+                "homekit_name": getattr(coordinator.homekit_server, "accessory_name", "IrrigationPro Sprinkler") if coordinator.homekit_server else "IrrigationPro Sprinkler",
             }
             result["entries"].append(entry_data)
 
@@ -970,6 +972,11 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
                 )
                 await hass.async_add_executor_job(hk.start)
                 coordinator.homekit_server = hk
+                if not hk.is_running:
+                    return self.json(
+                        {"error": hk.last_error or "HomeKit server failed to start"},
+                        status_code=500,
+                    )
             except Exception as err:
                 _LOGGER.exception("HomeKit start failed")
                 return self.json({"error": str(err)}, status_code=500)
@@ -978,7 +985,17 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
             await hass.async_add_executor_job(coordinator.homekit_server.stop)
 
         running = getattr(coordinator.homekit_server, "is_running", False) if coordinator.homekit_server else False
-        return self.json({"status": "ok", "homekit_enabled": enabled, "homekit_running": running, "port": port, "pin": pin})
+        return self.json(
+            {
+                "status": "ok",
+                "homekit_enabled": enabled,
+                "homekit_running": running,
+                "port": port,
+                "pin": pin,
+                "error": getattr(coordinator.homekit_server, "last_error", None) if coordinator.homekit_server else None,
+                "name": getattr(coordinator.homekit_server, "accessory_name", "IrrigationPro Sprinkler") if coordinator.homekit_server else "IrrigationPro Sprinkler",
+            }
+        )
 
 
 class IrrigationProHomeKitQRView(HomeAssistantView):

@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 import threading
+import time
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
@@ -217,15 +219,33 @@ class IrrigationProHomeKit:
         self._thread: threading.Thread | None = None
         self.is_running = False
         self.xhm_uri: str | None = None  # X-HM:// URI for QR pairing
+        self.last_error: str | None = None
+        self.accessory_name: str = "IrrigationPro Sprinkler"
+
+    def _is_local_port_in_use(self, port: int) -> bool:
+        """Return True if localhost:port is already accepting TCP connections."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.2)
+            return sock.connect_ex(("127.0.0.1", port)) == 0
 
     # -- public ---------------------------------------------------------
 
     def start(self) -> None:
         """Start the HAP driver in a daemon thread."""
+        self.last_error = None
         if not HAS_HAP:
-            _LOGGER.error("Cannot start HomeKit – HAP-python not installed")
+            self.last_error = "HAP-python not installed"
+            _LOGGER.error("Cannot start HomeKit – %s", self.last_error)
             return
         if self.is_running:
+            return
+
+        if self._is_local_port_in_use(self._port):
+            self.last_error = (
+                f"Port {self._port} is already in use. "
+                "Please select a different HomeKit port."
+            )
+            _LOGGER.error("Cannot start HomeKit – %s", self.last_error)
             return
 
         try:
@@ -236,7 +256,7 @@ class IrrigationProHomeKit:
             )
             accessory = IrrigationSystemAccessory(
                 self._driver,
-                "IrrigationPro Sprinkler",
+                self.accessory_name,
                 zones=self._coordinator.zones,
                 coordinator=self._coordinator,
                 hass=self._hass,
@@ -257,15 +277,28 @@ class IrrigationProHomeKit:
                 name="irrigationpro-hap",
             )
             self._thread.start()
-            self.is_running = True
-            _LOGGER.info(
-                "HomeKit server started on port %s (PIN: %s)",
-                self._port,
-                self._pin_code,
-            )
-        except Exception:
+            # Give the HAP server a brief moment to bind the port.
+            time.sleep(0.6)
+            if self._thread.is_alive() and self._is_local_port_in_use(self._port):
+                self.is_running = True
+                _LOGGER.info(
+                    "HomeKit server started on port %s (PIN: %s)",
+                    self._port,
+                    self._pin_code,
+                )
+            else:
+                self.is_running = False
+                self.xhm_uri = None
+                self.last_error = (
+                    self.last_error
+                    or f"HomeKit server did not bind to port {self._port}"
+                )
+                _LOGGER.error("Failed to start HomeKit server: %s", self.last_error)
+        except Exception as err:
+            self.last_error = str(err)
             _LOGGER.exception("Failed to start HomeKit server")
             self.is_running = False
+            self.xhm_uri = None
 
     def stop(self) -> None:
         """Stop the HAP driver."""
@@ -278,4 +311,5 @@ class IrrigationProHomeKit:
         self._thread = None
         self.is_running = False
         self.xhm_uri = None
+        self.last_error = None
         _LOGGER.info("HomeKit server stopped")
