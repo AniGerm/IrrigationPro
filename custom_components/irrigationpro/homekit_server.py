@@ -8,6 +8,7 @@ timers, and the sprinkler icon.
 from __future__ import annotations
 
 import asyncio
+import errno
 import logging
 import socket
 import threading
@@ -222,11 +223,17 @@ class IrrigationProHomeKit:
         self.last_error: str | None = None
         self.accessory_name: str = "IrrigationPro Sprinkler"
 
-    def _is_local_port_in_use(self, port: int) -> bool:
-        """Return True if localhost:port is already accepting TCP connections."""
+    def _is_port_available(self, port: int) -> bool:
+        """Return True if a TCP bind on all interfaces would succeed."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.2)
-            return sock.connect_ex(("127.0.0.1", port)) == 0
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(("", port))
+                return True
+            except OSError as err:
+                if err.errno == errno.EADDRINUSE:
+                    return False
+                return False
 
     # -- public ---------------------------------------------------------
 
@@ -240,7 +247,7 @@ class IrrigationProHomeKit:
         if self.is_running:
             return
 
-        if self._is_local_port_in_use(self._port):
+        if not self._is_port_available(self._port):
             self.last_error = (
                 f"Port {self._port} is already in use. "
                 "Please select a different HomeKit port."
@@ -277,9 +284,9 @@ class IrrigationProHomeKit:
                 name="irrigationpro-hap",
             )
             self._thread.start()
-            # Give the HAP server a brief moment to bind the port.
-            time.sleep(0.6)
-            if self._thread.is_alive() and self._is_local_port_in_use(self._port):
+            # Give the HAP server a brief moment to initialize.
+            time.sleep(0.9)
+            if self._thread.is_alive():
                 self.is_running = True
                 _LOGGER.info(
                     "HomeKit server started on port %s (PIN: %s)",
