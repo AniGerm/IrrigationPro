@@ -17,6 +17,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.components import zeroconf
 from homeassistant.util import dt as dt_util
 
+from .const import CONF_LANGUAGE, DEFAULT_LANGUAGE
+
 if TYPE_CHECKING:
     from .coordinator import SmartIrrigationCoordinator, ZoneData
 
@@ -94,6 +96,7 @@ if HAS_HAP:
                         "RemainingDuration",
                         "IsConfigured",
                         "Name",
+                        "ConfiguredName",
                     ],
                     unique_id=f"zone-{zone.zone_id}",
                 )
@@ -299,6 +302,29 @@ class IrrigationProHomeKit:
                     return False
                 return False
 
+    def _homekit_name(self, key: str) -> str:
+        """Return HomeKit display names based on the current configured language."""
+        lang = str(
+            self._coordinator.entry.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+        ).lower()
+
+        names = {
+            "mainswitch": {
+                "de": "Hauptschalter",
+                "en": "Mainswitch",
+            },
+            "pushover": {
+                "de": "Benachrichtigungen",
+                "en": "Notifications",
+            },
+            "sprinkler": {
+                "de": "Bewässerung",
+                "en": "Sprinkler",
+            },
+        }
+
+        return names.get(key, {}).get(lang, names.get(key, {}).get("en", key))
+
     @staticmethod
     def find_free_port(start: int, max_attempts: int = 50) -> int | None:
         """Return the next free TCP port starting at *start*, or None."""
@@ -372,14 +398,14 @@ class IrrigationProHomeKit:
 
             sprinkler = IrrigationSystemAccessory(
                 self._driver,
-                "Sprinkler",
+                self._homekit_name("sprinkler"),
                 zones=self._coordinator.zones,
                 coordinator=self._coordinator,
                 hass=self._hass,
             )
             mainswitch = RuntimeSwitchAccessory(
                 self._driver,
-                "Mainswitch",
+                self._homekit_name("mainswitch"),
                 hass=self._hass,
                 serial_suffix="MAIN",
                 getter=lambda: bool(
@@ -389,7 +415,7 @@ class IrrigationProHomeKit:
             )
             pushover_switch = RuntimeSwitchAccessory(
                 self._driver,
-                "Pushover",
+                self._homekit_name("pushover"),
                 hass=self._hass,
                 serial_suffix="PUSH",
                 getter=lambda: bool(

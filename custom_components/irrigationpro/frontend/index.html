@@ -1475,7 +1475,7 @@
       }
     };
 
-    const UI_VERSION = '2.1.5';
+    const UI_VERSION = '2.1.6';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -2097,7 +2097,7 @@
           _startCountdowns();
         } else {
           _stopCountdowns();
-          _setRefreshInterval(30000);
+          _setRefreshInterval(10000);
         }
 
         document.getElementById('lastUpdate').textContent =
@@ -2837,7 +2837,7 @@
         // Fast-poll for 12 s so the UI immediately picks up the new HomeKit state
         _setRefreshInterval(2000);
         setTimeout(() => {
-          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(30000);
+          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(10000);
         }, 12000);
         await loadData();
       } catch (err) {
@@ -2878,7 +2878,7 @@
         );
         _setRefreshInterval(2000);
         setTimeout(() => {
-          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(30000);
+          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(10000);
         }, 12000);
         await loadData();
       } catch (err) {
@@ -3272,7 +3272,7 @@
     // ── Startup ───────────────────────────────────────────────────────────────
     applyI18n();
     loadData();
-    refreshTimer = setInterval(loadData, 30000);
+    refreshTimer = setInterval(loadData, 10000);
   </script>
 </body>
 </html>
