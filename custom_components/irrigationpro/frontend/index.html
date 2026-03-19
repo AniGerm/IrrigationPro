@@ -1475,7 +1475,7 @@
       }
     };
 
-    const UI_VERSION = '2.1.6';
+    const UI_VERSION = '2.1.7';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -2093,11 +2093,11 @@
         // Adaptive polling: fast when zones are running, normal otherwise
         const anyRunning = data.entries?.some(e => e.zones?.some(z => z.is_running));
         if (anyRunning) {
-          _setRefreshInterval(5000);
+          _setRefreshInterval(3000);
           _startCountdowns();
         } else {
           _stopCountdowns();
-          _setRefreshInterval(10000);
+          _setRefreshInterval(3000);
         }
 
         document.getElementById('lastUpdate').textContent =
@@ -2837,7 +2837,7 @@
         // Fast-poll for 12 s so the UI immediately picks up the new HomeKit state
         _setRefreshInterval(2000);
         setTimeout(() => {
-          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(10000);
+          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(3000);
         }, 12000);
         await loadData();
       } catch (err) {
@@ -2848,7 +2848,7 @@
             `${t('toast.hk_port_busy', {port: String(port), free: String(sp)})} ` +
             `<button class="btn btn-sm" style="margin-left:8px;vertical-align:middle" ` +
             `onclick="document.getElementById('hk_port').value=${sp};saveHomeKitSettings()">${t('toast.hk_use_port', {port: String(sp)})}</button>`,
-            'error', 10000
+            'error', 3000
           );
         } else {
           showToast(t('toast.hk_error') + ': ' + err.message, 'error');
@@ -2878,7 +2878,7 @@
         );
         _setRefreshInterval(2000);
         setTimeout(() => {
-          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(10000);
+          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(3000);
         }, 12000);
         await loadData();
       } catch (err) {
@@ -3272,7 +3272,7 @@
     // ── Startup ───────────────────────────────────────────────────────────────
     applyI18n();
     loadData();
-    refreshTimer = setInterval(loadData, 10000);
+    refreshTimer = setInterval(loadData, 3000);
   </script>
 </body>
 </html>
