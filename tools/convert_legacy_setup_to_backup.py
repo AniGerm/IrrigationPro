@@ -144,8 +144,8 @@ def main() -> None:
     parser.add_argument("output", type=Path, help="Path to output backup json")
     parser.add_argument(
         "--weather-entity",
-        default="weather.home",
-        help="Fallback weather entity for new setup (default: weather.home)",
+        default="weather.example_home",
+        help="Fallback weather entity for new setup (default: weather.example_home)",
     )
     parser.add_argument(
         "--language",

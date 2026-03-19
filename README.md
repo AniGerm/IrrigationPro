@@ -4,141 +4,123 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Release](https://img.shields.io/github/release/AniGerm/IrrigationPro.svg)](https://github.com/AniGerm/IrrigationPro/releases)
 
-Eine moderne, intelligente Bewässerungssteuerung für Home Assistant, basierend auf wissenschaftlichen Prinzipien der Evapotranspiration (ETo).
+IrrigationPro ist eine wissenschaftlich fundierte Bewässerungssteuerung für Home Assistant. Die Integration berechnet den Wasserbedarf pro Zone auf Basis der FAO-56 Penman-Monteith Evapotranspiration, bietet ein eigenes Dashboard im Home Assistant Frontend und kann optional eine native HomeKit-Sprinkler-Bridge bereitstellen.
 
-## 🌟 Features
+## Features
 
-- **Wissenschaftlich fundiert**: Berechnung der Evapotranspiration nach FAO-56 Penman-Monteith Methode
-- **Klimaadaptiv**: Automatische Anpassung der Bewässerung basierend auf Wetter und Pflanzenbedarf
-- **Multi-Zonen**: Unterstützung für bis zu 16 unabhängige Bewässerungszonen
-- **Intelligente Planung**: Automatische Berechnung optimaler Bewässerungszeiten
-- **Wetterintegration**: Nutzung von Home Assistant Weather Entities oder OpenWeatherMap API
-- **Regenfaktorisierung**: Berücksichtigung von Niederschlag zur Wassereinsparung
-- **Flexible Konfiguration**: UI-basiertes Setup über Config Flow
-- **Home Assistant Native**: Vollständig async, mit modernen HA-Patterns
+- Klimaadaptive Bewässerungsplanung für bis zu 16 Zonen
+- Native Home Assistant Integration mit Config Flow, Services und Dashboard-Panel
+- Native HomeKit-Sprinkler-Bridge mit QR-Pairing, Zonen, Laufzeit und separaten Runtime-Schaltern
+- Master-Schalter zum globalen Pausieren/Freigeben der Bewässerung
+- Pushover-Benachrichtigungen direkt über die Pushover-API
+- Täglicher Morgenbericht mit geplantem Lauf und Wetterzusammenfassung
+- Backup und Restore der kompletten Konfiguration inklusive Legacy-Import
+- DE/EN Sprachumschaltung im UI und für Laufzeit-Benachrichtigungen
+- Home Assistant Wetterdaten oder OpenWeatherMap als Fallback
 
-## 📋 Voraussetzungen
+## Voraussetzungen
 
 - Home Assistant 2023.1 oder neuer
-- Eine Weather Entity in Home Assistant **ODER** OpenWeatherMap API Key (One Call 3.0)
-- Bewässerungssystem mit schaltbaren Ventilen (z.B. über Smart Plugs, Sonoff, etc.)
+- Mindestens eine schaltbare Ventil-/Relais-Infrastruktur in Home Assistant
+- Eine Weather-Entity in Home Assistant oder alternativ ein OpenWeatherMap API Key
+- Optional für HomeKit: freier TCP-Port für den HAP-Server
 
-## 🚀 Installation
+## Installation
 
-### HACS (empfohlen)
+### HACS
 
-1. Öffne HACS in Home Assistant
-2. Gehe zu "Integrationen"
-3. Klicke auf die drei Punkte oben rechts und wähle "Benutzerdefinierte Repositories"
-4. Füge diese Repository-URL hinzu: `https://github.com/AniGerm/IrrigationPro`
-5. Kategorie: "Integration"
-6. Klicke auf "Hinzufügen"
-7. Suche nach "IrrigationPro" und installiere es
-8. Starte Home Assistant neu
+1. Öffne HACS in Home Assistant.
+2. Gehe zu Integrationen.
+3. Öffne das Menü oben rechts und wähle Benutzerdefinierte Repositories.
+4. Füge https://github.com/AniGerm/IrrigationPro als Integration hinzu.
+5. Installiere IrrigationPro und starte Home Assistant neu.
 
 ### Manuell
 
-1. Kopiere den `custom_components/irrigationpro` Ordner in dein Home Assistant `config/custom_components/` Verzeichnis
-2. Starte Home Assistant neu
+1. Kopiere den Ordner custom_components/irrigationpro nach config/custom_components/.
+2. Starte Home Assistant neu.
 
-## ⚙️ Konfiguration
+## Einrichtung
 
-### UI Setup
+1. Öffne Einstellungen → Geräte & Dienste.
+2. Klicke auf Integration hinzufügen.
+3. Suche nach IrrigationPro.
+4. Folge dem Assistenten für Wetterquelle, Zonen und Zeitplanung.
 
-1. Gehe zu **Einstellungen** → **Geräte & Dienste**
-2. Klicke auf **Integration hinzufügen**
-3. Suche nach **IrrigationPro**
-4. Folge dem Setup-Assistenten:
+Wichtige Konfigurationspunkte:
 
-#### Schritt 1: Wetterquelle
-- Wähle deine Weather Entity aus
-- Optional: Aktiviere OpenWeatherMap als Fallback
-- Optional: Gib deinen OWM API Key ein
+- Zonenname, Fläche, Durchflussrate, Emitter-Anzahl, Effizienz, Crop Coefficient, Pflanzendichte und Expositionsfaktor
+- Wochentage und Monate pro Zone
+- Niederschlagsgrenze, Regenfaktorisierung und maximale Laufzeit
+- Sonnenaufgang-Offset, Zyklen, Temperaturschwellen und Recheck-Zeit
+- Sprache, Pushover, Tagesbericht und HomeKit
 
-#### Schritt 2: Anzahl der Zonen
-- Wähle die Anzahl der Bewässerungszonen (1-16)
+## Dashboard und Laufzeitfunktionen
 
-#### Schritt 3: Zonenkonfiguration
-Für jede Zone:
-- **Name**: Beschreibender Name (z.B. "Rasen vorne")
-- **Fläche**: Bewässerte Fläche in m²
-- **Durchflussrate**: Emitter-Durchfluss in L/h (pro Emitter)
-- **Anzahl Emitter**: Anzahl der Tropfer/Sprinkler
-- **Effizienz**: System-Effizienz in % (typisch 90% für Tropfbewässerung)
-- **Crop Coefficient**: Pflanzen-Koeffizient (0.1-0.9)
-  - 0.1-0.3: Trockenheitstolerante Pflanzen, Sukkulenten
-  - 0.4-0.6: Durchschnittliche Sträucher, Stauden
-  - 0.7-0.9: Rasen, wasserliebende Pflanzen
-- **Pflanzendichte**: (0.5-1.3)
-  - 0.5-0.9: Spärlich bepflanzt
-  - 1.0: Durchschnittliche Bepflanzung
-  - 1.1-1.3: Dichte Bepflanzung
-- **Exposure Factor**: Mikroklimat-Faktor (0.5-1.4)
-  - 0.5-0.9: Geschützt, teilweise schattig
-  - 1.0: Freies Feld
-  - 1.1-1.4: Exponiert, windig
-- **Max. Dauer**: Maximale Bewässerungsdauer in Minuten
-- **Regenschwelle**: Niederschlagsmenge (mm), ab der Bewässerung übersprungen wird
-- **Regenfaktorisierung**: Regen in Berechnung einbeziehen
-- **Zone aktiviert**: Zone einschalten
-- **Adaptive Bewässerung**: Klimabasierte Berechnung nutzen
+Das integrierte Dashboard bietet:
 
-#### Schritt 4: Zeitplanung
-- **Sonnenaufgang-Offset**: Minuten vor Sonnenaufgang (negativ = nach Sonnenaufgang)
-- **Zyklen**: Anzahl der Bewässerungszyklen pro Durchgang (1-5)
-- **Niedrige Temperatur**: Min. Temperatur-Schwellwert (°C)
-- **Hohe Temperatur**: Min. Max-Temperatur-Schwellwert (°C)
-- **Recheck-Zeit**: Minuten vor Start erneut prüfen (0 = deaktiviert)
-- **Pushover aktivieren**: Push-Benachrichtigungen über Pushover senden
-- **Pushover User Key**: Dein Pushover User Key
-- **Pushover Device** (optional): Spezifisches Gerät
-- **Pushover Priority**: Priorität der Benachrichtigungen (-2 bis 2)
+- Statusübersicht für Laufzeiten, Wetter und Planung
+- Zonenkarten mit manuellem Start/Stop
+- Runtime-Schalter für Hauptschalter und Pushover
+- Backup/Restore-Dialog
+- HomeKit-Dialog mit Port, PIN und QR-Code
+- Testfunktionen für Relais, Planung und Pushover
 
-### Pushover-Benachrichtigungen
+## HomeKit
 
-Die Integration kann automatische Benachrichtigungen über Pushover senden:
-- **Start der Bewässerung**: Wenn ein Bewässerungszyklus beginnt
-- **Zonenstart**: Wenn eine einzelne Zone startet (niedrige Priorität)
-- **Bewässerung abgeschlossen**: Nach erfolgreichem Abschluss
-- **Fehler**: Bei Problemen während der Bewässerung
+Wenn HomeKit aktiviert ist, startet IrrigationPro eine eigene native HAP-Bridge.
 
-**Setup:**
-1. Registriere dich bei [Pushover](https://pushover.net/)
-2. Installiere die Pushover-App auf deinem Smartphone
-3. Kopiere deinen User Key aus dem Pushover Dashboard
-4. Optional: Konfiguriere die [Home Assistant Pushover Integration](https://www.home-assistant.io/integrations/pushover/)
-5. Aktiviere Pushover in den IrrigationPro-Einstellungen
+Bereitgestellt werden:
 
-**Hinweis:** Die HA Pushover-Integration muss **nicht** eingerichtet sein - IrrigationPro ruft den `notify.pushover` Service direkt auf.
+- Eine native Bewässerungsanlage in Apple Home
+- Eine Valve-Service-Zuordnung pro Zone
+- Ein separater Hauptschalter als HomeKit-Switch
+- Ein separater Benachrichtigungsschalter für Pushover
+- QR-Pairing und PIN-basiertes Koppeln
 
-## 📊 Entities
+Hinweise:
 
-Die Integration erstellt pro Zone folgende Entities:
+- Der HomeKit-Port muss frei sein und darf nicht mit einer bestehenden HA-HomeKit-Bridge kollidieren.
+- Nach strukturellen HomeKit-Änderungen kann es nötig sein, die Bridge in Apple Home neu zu koppeln.
 
-### Switch
-- `switch.irrigation_zone_X` - Zonensteuerung (Ein/Aus)
+## Pushover und Tagesbericht
 
-### Sensoren
-- `sensor.irrigation_zone_X_duration` - Geplante Bewässerungsdauer (Minuten)
-- `sensor.irrigation_zone_X_eto` - Evapotranspiration bis zur nächsten Bewässerung (mm)
-- `sensor.irrigation_zone_X_next_run` - Zeitstempel der nächsten Bewässerung
+IrrigationPro spricht die Pushover-API direkt an. Eine separate Home Assistant Pushover-Integration ist dafür nicht erforderlich.
 
-### Binary Sensoren
-- `binary_sensor.irrigation_zone_X_will_run_today` - Wird heute bewässert?
+Unterstützt werden:
 
-## 🔧 Services
+- Start- und Stop-Benachrichtigungen
+- Zonenstart-Benachrichtigungen
+- Fehlermeldungen
+- Testbenachrichtigungen aus dem Dashboard
+- Optionaler täglicher Morgenbericht mit geplanter Bewässerung und Wetterdaten
 
-### `irrigationpro.start_zone`
-Startet eine Zone manuell für eine bestimmte Dauer.
+## Entities
+
+Pro Zone werden typischerweise folgende Entities angelegt:
+
+- switch.irrigation_zone_X
+- valve.irrigation_zone_X
+- sensor.irrigation_zone_X_duration
+- sensor.irrigation_zone_X_eto
+- sensor.irrigation_zone_X_next_run
+- binary_sensor.irrigation_zone_X_will_run_today
+
+## Services
+
+### irrigationpro.start_zone
+
+Startet eine Zone manuell für eine angegebene Dauer.
 
 ```yaml
 service: irrigationpro.start_zone
 data:
   zone_id: 1
-  duration: 15  # Minuten
+  duration: 15
 ```
 
-### `irrigationpro.stop_zone`
+### irrigationpro.stop_zone
+
 Stoppt eine laufende Zone.
 
 ```yaml
@@ -147,8 +129,9 @@ data:
   zone_id: 1
 ```
 
-### `irrigationpro.recalculate`
-Erzwingt Neuberechnung des Bewässerungsplans.
+### irrigationpro.recalculate
+
+Erzwingt eine Neuberechnung des Bewässerungsplans.
 
 ```yaml
 service: irrigationpro.recalculate
@@ -156,47 +139,21 @@ service: irrigationpro.recalculate
 
 ## Backup und Restore
 
-Die Integration bietet API-Endpunkte fuer Export/Import der kompletten Konfiguration.
+Die Integration unterstützt Export und Restore der kompletten Konfiguration.
 
-- `GET /api/irrigationpro/backup/export`
-  Exportiert ein natives Backup (`backup_format: irrigationpro-backup-v1`).
-- `POST /api/irrigationpro/backup/restore`
-  Stellt eine Konfiguration wieder her.
-- `GET /api/irrigationpro/zones/schedule`
-  Liefert pro Zone die aktuell gesetzten `zone_weekdays` und `zone_months`.
-- `POST /api/irrigationpro/zones/schedule`
-  Aktualisiert `zone_weekdays` und/oder `zone_months` pro Zone (eine oder mehrere).
+- Natives Backup-Format: irrigationpro-backup-v1
+- Legacy-Import aus SmartSprinklers-ähnlichen Setups
+- Zonenspezifische Wochentage und Monate werden mitgeführt
 
-Der Restore-Endpunkt akzeptiert zwei Formate:
+Zusätzlich steht ein Konvertierungsskript für Legacy-Daten bereit:
 
-1. Natives Backup-Format (`irrigationpro-backup-v1`)
-2. Legacy-Setup-Format aus SmartSprinklers-aehnlichen Dateien
+- tools/convert_legacy_setup_to_backup.py
 
-Hinweise zur Kompatibilitaet:
+## Automationen
 
-- Beim Legacy-Import werden Monate (`Jan`..`Dec`) und Wochentage normalisiert.
-- `dripLPH` wird als Gesamt-Durchfluss interpretiert und auf `zone_flow_rate` pro Emitter umgerechnet (`dripLPH / dripNos`).
-- Wenn im Legacy-Setup keine `switch_entity` enthalten ist, bleibt die vorhandene Zuordnung erhalten (oder leer, falls keine existiert).
+IrrigationPro steuert keine reale Hardware direkt. Die tatsächliche Ventilschaltung erfolgt über deine vorhandenen Home Assistant Entities und Automationen.
 
-Beispiel-Workflow:
-
-1. Backup aus laufendem System exportieren.
-2. Optional Legacy-Datei mit `tools/convert_legacy_setup_to_backup.py` in ein natives Backup konvertieren.
-3. Backup per `POST /api/irrigationpro/backup/restore` einspielen.
-
-Beispiel fuer eine gezielte Aktualisierung einer Zone:
-
-```json
-{
-  "zone_id": 1,
-  "zone_weekdays": ["monday", "wednesday", "friday"],
-  "zone_months": [4, 5, 6, 7, 8, 9]
-}
-```
-
-## 🤖 Automationen
-
-### Beispiel: Ventil mit Zone synchronisieren
+Beispiel:
 
 ```yaml
 automation:
@@ -210,95 +167,40 @@ automation:
           entity_id: switch.gardena_valve_1
 ```
 
-### Beispiel: Benachrichtigung bei Start
+## Wissenschaftlicher Hintergrund
 
-```yaml
-automation:
-  - alias: "Bewässerung - Start-Benachrichtigung"
-    trigger:
-      - platform: state
-        entity_id: switch.irrigation_zone_1
-        to: "on"
-    action:
-      - service: notify.mobile_app
-        data:
-          title: "Bewässerung gestartet"
-          message: "Zone 1 wird für {{ state_attr('sensor.irrigation_zone_1_duration', 'state') }} Minuten bewässert"
-```
+Die Referenz-Evapotranspiration wird nach FAO-56 berechnet. Berücksichtigt werden unter anderem:
 
-## 📐 Wissenschaftlicher Hintergrund
-
-### Evapotranspiration (ETo)
-
-Die Integration berechnet die Referenz-Evapotranspiration nach der [FAO-56 Penman-Monteith Methode](http://www.fao.org/3/X0490E/x0490e00.htm). Dabei werden berücksichtigt:
-
-- Min/Max Temperaturen
-- Relative Luftfeuchtigkeit
+- Min-/Max-Temperatur
+- relative Luftfeuchtigkeit
 - Windgeschwindigkeit
-- Solare Strahlung
-- Atmosphärischer Druck
-- Geografische Position (Breite, Höhe)
-- Julianischer Tag
+- solare Strahlung
+- atmosphärischer Druck
+- geografische Lage und Jahreszeit
 
-### Zonenbedarf Berechnung
+Vereinfacht gilt:
 
-Der Wasserbedarf einer Zone wird wie folgt berechnet:
-
-```
+```text
 Wasserbedarf = (ETo - Regen) × Crop_Koeff × Pflanzendichte × Exposure_Factor × Fläche / Effizienz
 Dauer = Wasserbedarf / (Durchflussrate × Anzahl_Emitter)
 ```
 
-## 🌤️ Wetterquellen
-
-### Home Assistant Weather Entity
-Die bevorzugte Methode nutzt eine bestehende Weather Entity in Home Assistant:
-- Wettervorhersage wird von der Entity abgerufen
-- Unterstützt alle HA Weather-Integrationen
-- Keine zusätzlichen API-Schlüssel nötig
-
-### OpenWeatherMap Fallback
-Optional kann die moderne OWM One Call 3.0 API als Fallback genutzt werden:
-- Kostenlose Tier: 1000 Aufrufe/Tag
-- Anmeldung: [OpenWeatherMap](https://openweathermap.org/api)
-
-## 🔧 Erweiterte Konfiguration
-
-### Solar Radiation Daten
-
-Die Integration nutzt standardmäßig durchschnittliche Werte von 6 kWh/m²/Tag. Für präzisere Berechnungen können monatliche Werte konfiguriert werden.
-
-Quellen für deine Region:
-- [WeatherSpark](https://weatherspark.com/)
-- NASA POWER Data
-- Lokale Wetterstationen
-
-### Hardware-Empfehlungen
-
-- **Ventile**: 12V/24V DC Magnetventile
-- **Steuerung**: 
-  - Sonoff 4CH Pro (4 Zonen)
-  - Shelly 4Pro (4 Zonen)
-  - Relais-Module über ESPHome
-- **Durchflussmesser**: Optional zur Verbrauchsüberwachung
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Keine Bewässerung geplant
 
-Überprüfe:
-- Temperature Schwellwerte erreicht?
-- Zone aktiviert?
-- Wettervorhersage verfügbar?
-- Logs in Home Assistant: `custom_components.irrigationpro`
+- Prüfe, ob die Temperaturschwellen erreicht wurden.
+- Prüfe, ob die Zone aktiviert ist.
+- Prüfe, ob Wetterdaten verfügbar sind.
+- Prüfe die Logs von custom_components.irrigationpro.
 
-### Wetterabfrage schlägt fehl
+### HomeKit startet nicht
 
-- Prüfe Weather Entity Status
-- Bei OWM: API Key korrekt?
-- Netzwerkverbindung OK?
+- Prüfe, ob der konfigurierte HAP-Port frei ist.
+- Prüfe, ob HAP-python installiert wurde.
+- Prüfe, ob Apple Home noch eine alte Bridge-Konfiguration zwischengespeichert hat.
 
-### Debug Logging aktivieren
+### Debug Logging
 
 ```yaml
 logger:
@@ -307,44 +209,23 @@ logger:
     custom_components.irrigationpro: debug
 ```
 
-## 📝 YAML Konfiguration (Alternative)
-
-Obwohl die UI-Konfiguration empfohlen wird, ist auch YAML möglich:
-
-```yaml
-# Nicht empfohlen - nutze Config Flow!
-# Diese Struktur ist nur zur Information
-```
-
-## 🤝 Beitragen
-
-Contributions sind willkommen! Bitte:
-1. Fork das Repository
-2. Erstelle einen Feature Branch
-3. Committe deine Änderungen
-4. Öffne einen Pull Request
-
-## 📄 Lizenz
-
-MIT License - siehe [LICENSE](LICENSE)
-
-## 🙏 Danksagung
-
-Basierend auf der Arbeit von:
-- [MTry/homebridge-smart-irrigation](https://github.com/MTry/homebridge-smart-irrigation) - Original Konzept und Logik
-- [FAO Irrigation and Drainage Paper No. 56](http://www.fao.org/3/X0490E/x0490e00.htm) - Wissenschaftliche Grundlagen
-
-## 📚 Weitere Ressourcen
-
-- [FAO Penman-Monteith Equation](https://edis.ifas.ufl.edu/pdffiles/ae/ae45900.pdf)
-- [UC ANR - Plant Water Use](https://ucanr.edu/sites/UrbanHort/Water_Use_of_Turfgrass_and_Landscape_Plant_Materials/)
-- [Drip Irrigation Scheduling](https://ucanr.edu/sites/scmg/files/30917.pdf)
-
-## 💬 Support
+## Support
 
 - GitHub Issues: [Issues](https://github.com/AniGerm/IrrigationPro/issues)
 - Home Assistant Community: [Community](https://community.home-assistant.io/)
 
----
+## Beitragen
 
-**Hinweis**: Diese Integration führt keine tatsächlichen Schaltoperationen durch. Sie stellt nur Steuerungs-Entities bereit. Die physische Ansteuerung der Ventile erfolgt über Automationen mit deinen vorhandenen Smart-Home-Geräten.
+1. Forke das Repository.
+2. Erstelle einen Feature-Branch.
+3. Committe deine Änderungen.
+4. Öffne einen Pull Request.
+
+## Lizenz
+
+MIT License, siehe [LICENSE](LICENSE).
+
+## Danksagung
+
+- [MTry/homebridge-smart-irrigation](https://github.com/MTry/homebridge-smart-irrigation) für die ursprüngliche Idee
+- [FAO Irrigation and Drainage Paper No. 56](http://www.fao.org/3/X0490E/x0490e00.htm) für die wissenschaftliche Grundlage
