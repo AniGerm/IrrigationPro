@@ -3,11 +3,13 @@
   "name": "IrrigationPro",
   "codeowners": ["@AniGerm"],
   "config_flow": true,
+  "integration_type": "hub",
   "dependencies": [],
   "after_dependencies": ["weather", "met"],
-  "documentation": "https://github.com/AniGerm/IrrigationPro",
+  "documentation": "https://github.com/AniGerm/IrrigationPro#readme",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/AniGerm/IrrigationPro/issues",
+  "loggers": ["pyhap"],
   "requirements": ["HAP-python>=4.6.0", "qrcode>=7.0"],
   "version": "2.1.7"
 }

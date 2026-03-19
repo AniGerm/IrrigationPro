@@ -5,6 +5,45 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.1.7] - 2026-03-19
+
+### Behoben
+- HACS- und Repository-Metadaten auf den aktuellen Release-Stand 2.1.7 gebracht
+- Authentifizierungs- und Publish-Details für die Veröffentlichung bereinigt
+- README und Branding für den HACS-Einsatz überarbeitet
+
+## [2.1.6] - 2026-03-18
+
+### Geändert
+- Lokalisierte Namen für HomeKit-Valves und Runtime-Switches ergänzt
+- UI- und HomeKit-Statusaktualisierung beschleunigt
+
+## [2.1.5] - 2026-03-18
+
+### Behoben
+- UI-Sprache und Backend-Sprache für Laufzeit-Pushover-Texte synchronisiert
+
+## [2.1.4] - 2026-03-17
+
+### Geändert
+- Runtime-Switches in HomeKit klarer vom Sprinkler getrennt
+- Benennung in HomeKit verbessert
+
+## [2.1.3] - 2026-03-17
+
+### Hinzugefügt
+- Separate Runtime-Toggles für Hauptschalter und Pushover im Dashboard und in HomeKit
+
+## [2.1.2] - 2026-03-17
+
+### Hinzugefügt
+- HomeKit AccessoryInformation mit Hersteller, Modell, Seriennummer und Firmware-Version ergänzt
+
+## [2.1.1] - 2026-03-17
+
+### Hinzugefügt
+- Automatischer Vorschlag eines freien Ports, wenn der konfigurierte HomeKit-Port belegt ist
+
 ## [1.1.0] - 2026-02-06
 
 ### Hinzugefügt

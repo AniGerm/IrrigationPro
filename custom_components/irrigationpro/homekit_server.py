@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.components import zeroconf
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_LANGUAGE, DEFAULT_LANGUAGE
+from .const import CONF_LANGUAGE, DEFAULT_LANGUAGE, VERSION
 
 if TYPE_CHECKING:
     from .coordinator import SmartIrrigationCoordinator, ZoneData
@@ -73,7 +73,7 @@ if HAS_HAP:
                 manufacturer="IrrigationPro",
                 model="Smart Irrigation Controller",
                 serial_number="IRRIGPRO-001",
-                firmware_revision="2.1.3",
+                firmware_revision=VERSION,
             )
 
             # -- Primary IrrigationSystem service --
@@ -246,7 +246,7 @@ if HAS_HAP:
                 manufacturer="IrrigationPro",
                 model="Runtime Switch",
                 serial_number=f"IRRIGPRO-{serial_suffix}",
-                firmware_revision="2.1.4",
+                firmware_revision=VERSION,
             )
 
             svc = self.add_preload_service("Switch", chars=["Name"])
@@ -401,7 +401,7 @@ class IrrigationProHomeKit:
                 manufacturer="IrrigationPro",
                 model="HomeKit Bridge",
                 serial_number="IRRIGPRO-BRIDGE",
-                firmware_revision="2.1.4",
+                firmware_revision=VERSION,
             )
 
             sprinkler = IrrigationSystemAccessory(

@@ -64,6 +64,7 @@
       "invalid_auth": "Invalid API key",
       "unknown": "Unexpected error occurred",
       "no_weather_entity": "No weather entity selected",
+      "no_weather_entities": "No weather entities found in Home Assistant",
       "weather_entity_not_found": "Selected weather entity not found",
       "pushover_no_token": "Pushover enabled but no API token provided",
       "pushover_no_key": "Pushover enabled but no user key provided",

@@ -6,6 +6,8 @@
 
 IrrigationPro ist eine wissenschaftlich fundierte Bewässerungssteuerung für Home Assistant. Die Integration berechnet den Wasserbedarf pro Zone auf Basis der FAO-56 Penman-Monteith Evapotranspiration, bietet ein eigenes Dashboard im Home Assistant Frontend und kann optional eine native HomeKit-Sprinkler-Bridge bereitstellen.
 
+Der aktuelle veröffentlichungsreife Stand ist Version 2.1.7. Das Repository ist als HACS-Custom-Repository strukturiert und enthält bereits die nötigen Validierungs-Workflows für HACS und Hassfest.
+
 ## Features
 
 - Klimaadaptive Bewässerungsplanung für bis zu 16 Zonen
@@ -34,6 +36,8 @@ IrrigationPro ist eine wissenschaftlich fundierte Bewässerungssteuerung für Ho
 3. Öffne das Menü oben rechts und wähle Benutzerdefinierte Repositories.
 4. Füge https://github.com/AniGerm/IrrigationPro als Integration hinzu.
 5. Installiere IrrigationPro und starte Home Assistant neu.
+
+Hinweis: Solange das Repository noch nicht in der HACS-Standardliste aufgenommen wurde, erfolgt die Installation über Benutzerdefinierte Repositories. Nach erfolgreicher Aufnahme in HACS kann IrrigationPro direkt über die Suche gefunden werden.
 
 ### Manuell
 
@@ -213,6 +217,12 @@ logger:
 
 - GitHub Issues: [Issues](https://github.com/AniGerm/IrrigationPro/issues)
 - Home Assistant Community: [Community](https://community.home-assistant.io/)
+
+## Release-Workflow
+
+- Vor einer HACS-Veröffentlichung sollten HACS-Validation und Hassfest in GitHub Actions grün sein.
+- Für die Aufnahme in die HACS-Standardliste ist ein echtes GitHub Release erforderlich; ein Tag allein reicht dafür nicht aus.
+- Repository-Beschreibung, Topics und aktivierte Issues werden in GitHub geprüft und sollten vor dem Einreichen gesetzt sein.
 
 ## Beitragen
 
