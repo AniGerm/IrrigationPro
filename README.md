@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Release](https://img.shields.io/github/release/AniGerm/IrrigationPro.svg)](https://github.com/AniGerm/IrrigationPro/releases)
 
-IrrigationPro ist eine wissenschaftlich fundierte Bewässerungssteuerung für Home Assistant. Die Integration berechnet den Wasserbedarf pro Zone auf Basis der FAO-56 Penman-Monteith Evapotranspiration, bietet ein eigenes Dashboard im Home Assistant Frontend und kann optional eine native HomeKit-Sprinkler-Bridge bereitstellen.
+IrrigationPro ist eine wissenschaftlich fundierte Bewässerungssteuerung für Home Assistant. Die Integration berechnet den Wasserbedarf pro Zone auf Basis der FAO-56 Penman-Monteith Evapotranspiration, bietet ein eigenes Dashboard im Home Assistant Frontend, unterstützt Backup und Restore der Konfiguration und kann optional eine native HomeKit-Sprinkler-Bridge bereitstellen.
 
 Der aktuelle veröffentlichungsreife Stand ist Version 2.1.7. Das Repository ist als HACS-Custom-Repository strukturiert und enthält bereits die nötigen Validierungs-Workflows für HACS und Hassfest.
 
@@ -12,13 +12,15 @@ Der aktuelle veröffentlichungsreife Stand ist Version 2.1.7. Das Repository ist
 
 - Klimaadaptive Bewässerungsplanung für bis zu 16 Zonen
 - Native Home Assistant Integration mit Config Flow, Services und Dashboard-Panel
-- Native HomeKit-Sprinkler-Bridge mit QR-Pairing, Zonen, Laufzeit und separaten Runtime-Schaltern
+- Native HomeKit-Sprinkler-Bridge mit QR-Pairing, automatischer Port-Empfehlung, Zonen, Laufzeit und separaten Runtime-Schaltern
 - Master-Schalter zum globalen Pausieren/Freigeben der Bewässerung
 - Pushover-Benachrichtigungen direkt über die Pushover-API
 - Täglicher Morgenbericht mit geplantem Lauf und Wetterzusammenfassung
-- Backup und Restore der kompletten Konfiguration inklusive Legacy-Import
+- Backup, Restore und vorbereiteter Legacy-Import der kompletten Konfiguration
 - DE/EN Sprachumschaltung im UI und für Laufzeit-Benachrichtigungen
 - Home Assistant Wetterdaten oder OpenWeatherMap als Fallback
+- Stabiler Start auch bei vorübergehend nicht verfügbarer Wetter-Entity mit automatischem Retry
+- Zone-spezifische Wochentage, Monate, adaptive Parameter und Laufzeitdiagnosen
 
 ## Voraussetzungen
 
@@ -66,9 +68,10 @@ Das integrierte Dashboard bietet:
 - Statusübersicht für Laufzeiten, Wetter und Planung
 - Zonenkarten mit manuellem Start/Stop
 - Runtime-Schalter für Hauptschalter und Pushover
-- Backup/Restore-Dialog
-- HomeKit-Dialog mit Port, PIN und QR-Code
+- Backup/Restore-Dialog mit nativer Export-/Importfunktion und vorbereiteter Legacy-Konvertierung
+- HomeKit-Dialog mit Port, PIN, QR-Code und Hinweis auf freie Alternativ-Ports
 - Testfunktionen für Relais, Planung und Pushover
+- Status- und Diagnosewerte für Dauer, ETo, Niederschlag, Wasserbedarf und nächsten Lauf
 
 ## HomeKit
 
@@ -81,10 +84,12 @@ Bereitgestellt werden:
 - Ein separater Hauptschalter als HomeKit-Switch
 - Ein separater Benachrichtigungsschalter für Pushover
 - QR-Pairing und PIN-basiertes Koppeln
+- AccessoryInformation mit Hersteller, Modell, Seriennummer und Firmware-Version
 
 Hinweise:
 
 - Der HomeKit-Port muss frei sein und darf nicht mit einer bestehenden HA-HomeKit-Bridge kollidieren.
+- Wenn der konfigurierte Port belegt ist, schlägt IrrigationPro automatisch einen freien alternativen Port vor.
 - Nach strukturellen HomeKit-Änderungen kann es nötig sein, die Bridge in Apple Home neu zu koppeln.
 
 ## Pushover und Tagesbericht
@@ -98,6 +103,7 @@ Unterstützt werden:
 - Fehlermeldungen
 - Testbenachrichtigungen aus dem Dashboard
 - Optionaler täglicher Morgenbericht mit geplanter Bewässerung und Wetterdaten
+- Laufzeitumschaltung direkt aus Dashboard und HomeKit
 
 ## Entities
 
@@ -148,10 +154,15 @@ Die Integration unterstützt Export und Restore der kompletten Konfiguration.
 - Natives Backup-Format: irrigationpro-backup-v1
 - Legacy-Import aus SmartSprinklers-ähnlichen Setups
 - Zonenspezifische Wochentage und Monate werden mitgeführt
+- Wiederherstellung über Dashboard-API mit vorbereiteter Prüf- und Bearbeitungsstufe
 
 Zusätzlich steht ein Konvertierungsskript für Legacy-Daten bereit:
 
 - tools/convert_legacy_setup_to_backup.py
+
+## Verhalten bei fehlenden Wetterdaten
+
+Wenn die konfigurierte Wetter-Entity beim Start oder zur Laufzeit vorübergehend nicht verfügbar ist, bleibt die Integration geladen. IrrigationPro setzt die Planung in einen sicheren Wartezustand und versucht automatisch im 2-Minuten-Takt erneut, Wetterdaten abzurufen, bis wieder eine valide Prognose verfügbar ist.
 
 ## Automationen
 
@@ -223,6 +234,7 @@ logger:
 - Vor einer HACS-Veröffentlichung sollten HACS-Validation und Hassfest in GitHub Actions grün sein.
 - Für die Aufnahme in die HACS-Standardliste ist ein echtes GitHub Release erforderlich; ein Tag allein reicht dafür nicht aus.
 - Repository-Beschreibung, Topics und aktivierte Issues werden in GitHub geprüft und sollten vor dem Einreichen gesetzt sein.
+- Historische rote Workflow-Läufe bleiben in GitHub sichtbar; bereinigt werden nur zukünftige Läufe über einen enger gefassten Workflow.
 
 ## Beitragen
 
