@@ -160,20 +160,6 @@ service: irrigationpro.recalculate
 - GitHub Issues: [Issues](https://github.com/AniGerm/IrrigationPro/issues)
 - Home Assistant Community: [Community](https://community.home-assistant.io/)
 
-## Release-Workflow
-
-- Vor einer HACS-Veröffentlichung sollten HACS-Validation und Hassfest in GitHub Actions grün sein.
-- Für die Aufnahme in die HACS-Standardliste ist ein echtes GitHub Release erforderlich; ein Tag allein reicht dafür nicht aus.
-- Repository-Beschreibung, Topics und aktivierte Issues werden in GitHub geprüft und sollten vor dem Einreichen gesetzt sein.
-- Historische rote Workflow-Läufe bleiben in GitHub sichtbar; bereinigt werden nur zukünftige Läufe über einen enger gefassten Workflow.
-
-## Beitragen
-
-1. Forke das Repository.
-2. Erstelle einen Feature-Branch.
-3. Committe deine Änderungen.
-4. Öffne einen Pull Request.
-
 ## Licence
 
 MIT License, see [LICENSE](LICENSE).
