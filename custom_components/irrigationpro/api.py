@@ -823,6 +823,7 @@ class IrrigationProSettingsLanguageView(HomeAssistantView):
             coordinator.entry,
             data={**coordinator.entry.data, CONF_LANGUAGE: language},
         )
+        coordinator.entry = hass.config_entries.async_get_entry(coordinator.entry.entry_id) or coordinator.entry
         return self.json({"status": "ok", "language": language})
 
 

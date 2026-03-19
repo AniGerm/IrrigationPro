@@ -1475,7 +1475,7 @@
       }
     };
 
-    const UI_VERSION = '2.1.4';
+    const UI_VERSION = '2.1.5';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -1502,6 +1502,23 @@
       localStorage.setItem('irrigationpro_lang', lang);
       applyI18n();
       if (_lastData) renderData(_lastData);
+
+      // Persist UI language so backend notifications use the same language.
+      try {
+        const entryId = _lastData?.entries?.[0]?.entry_id;
+        const resp = await fetch(API_BASE + '/settings/language', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ entry_id: entryId, language: lang })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data.error || 'HTTP ' + resp.status);
+        }
+      } catch (err) {
+        showToast((lang === 'de' ? 'Fehler Sprache-Sync: ' : 'Language sync error: ') + err.message, 'error');
+      }
     }
 
     let _lastData = null;
