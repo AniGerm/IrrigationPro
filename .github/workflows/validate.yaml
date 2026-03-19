@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: "actions/checkout@v4"
       - name: HACS validation
-        uses: "hacs/action@2.0.5"
+        uses: "hacs/action@main"
         with:
           category: "integration"
       - name: Hassfest validation
