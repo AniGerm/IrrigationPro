@@ -303,12 +303,6 @@ Es werden für jede Zone folgende Entitäten erstellt:
 - GitHub Issues: [Issues](https://github.com/AniGerm/IrrigationPro/issues)
 - Home Assistant Community: [Community](https://community.home-assistant.io/)
 
-## Release-Workflow
-
-- Vor einer Veröffentlichung auf HACS sollte die Validierung und Hassfest grün sein.
-- Für die Aufnahme in die Standardliste ist ein echtes GitHub Release erforderlich; ein Tag allein reicht dafür nicht aus.
-- Repositorybeschreibungen, Topics und aktivierte Issues werden in GitHub geprüft und sollten vor dem Einreichen gesetzt sein.
-- Historische rote Workflowläufe bleiben in GitHub sichtbar; Bereinigungsarbeiten finden nur für künftige Läufe statt.
 
 ## Beitragen
 
