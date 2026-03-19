@@ -11,7 +11,7 @@ import asyncio
 import errno
 import logging
 import socket
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
 from homeassistant.components import zeroconf
@@ -24,13 +24,15 @@ _LOGGER = logging.getLogger(__name__)
 
 HAS_HAP = False
 try:
-    from pyhap.accessory import Accessory
+    from pyhap.accessory import Accessory, Bridge
     from pyhap.accessory_driver import AccessoryDriver
 
     try:
         from pyhap.const import CATEGORY_SPRINKLER
+        from pyhap.const import CATEGORY_SWITCH
     except ImportError:
         CATEGORY_SPRINKLER = 28
+        CATEGORY_SWITCH = 8
 
     HAS_HAP = True
 except ImportError:
@@ -44,7 +46,7 @@ except ImportError:
 if HAS_HAP:
 
     class IrrigationSystemAccessory(Accessory):
-        """Single HAP accessory: IrrigationSystem + linked Valves."""
+        """Sprinkler accessory: IrrigationSystem + linked Valves."""
 
         category = CATEGORY_SPRINKLER  # type: ignore[assignment]
 
@@ -63,8 +65,6 @@ if HAS_HAP:
             self._hass = hass
             self._homekit_durations: dict[int, int] = {}
             self._valve_services: dict[int, Any] = {}
-            self._master_switch: Any | None = None
-            self._pushover_switch: Any | None = None
 
             # -- AccessoryInformation (shown in Apple Home → Geräteinfos) --
             self.set_info_service(
@@ -85,36 +85,6 @@ if HAS_HAP:
             irr.is_primary_service = True
             self._irr_service = irr
 
-            master = self.add_preload_service(
-                "Switch",
-                chars=["Name"],
-                unique_id="master-enabled",
-            )
-            master.display_name = "Hauptschalter"
-            master.configure_char("Name", value="Hauptschalter")
-            master.configure_char(
-                "On",
-                value=1 if self._coordinator.entry.data.get("master_enabled", True) else 0,
-                setter_callback=self._on_set_master_enabled,
-            )
-            irr.linked_services.append(master)
-            self._master_switch = master
-
-            pushover = self.add_preload_service(
-                "Switch",
-                chars=["Name"],
-                unique_id="pushover-enabled",
-            )
-            pushover.display_name = "Pushover"
-            pushover.configure_char("Name", value="Pushover")
-            pushover.configure_char(
-                "On",
-                value=1 if self._coordinator.entry.data.get("pushover_enabled", False) else 0,
-                setter_callback=self._on_set_pushover_enabled,
-            )
-            irr.linked_services.append(pushover)
-            self._pushover_switch = pushover
-
             # -- One Valve per zone --
             for zone in zones:
                 valve = self.add_preload_service(
@@ -134,6 +104,11 @@ if HAS_HAP:
                     "IsConfigured", value=1 if zone.enabled else 0
                 )
                 valve.configure_char("Name", value=zone.name)
+                try:
+                    valve.configure_char("ConfiguredName", value=zone.name)
+                except Exception:
+                    # Optional characteristic depending on service definition.
+                    pass
                 valve.configure_char("Active", value=0)
                 valve.configure_char("InUse", value=0)
                 valve.configure_char(
@@ -190,18 +165,6 @@ if HAS_HAP:
             """User changed SetDuration for a valve in Apple Home."""
             self._homekit_durations[zone_id] = value
 
-        def _on_set_master_enabled(self, value: int) -> None:
-            """Toggle global irrigation enable/disable from HomeKit."""
-            self._hass.async_create_task(
-                self._coordinator.async_set_master_enabled(bool(value))
-            )
-
-        def _on_set_pushover_enabled(self, value: int) -> None:
-            """Toggle Pushover notifications from HomeKit."""
-            self._hass.async_create_task(
-                self._coordinator.async_set_pushover_enabled(bool(value))
-            )
-
         # -- Periodic state sync (every 3 s) --
 
         @Accessory.run_at_interval(3)
@@ -245,14 +208,54 @@ if HAS_HAP:
             self._irr_service.get_characteristic("ProgramMode").set_value(
                 1 if self._coordinator.scheduled_run is not None else 0
             )
-            if self._master_switch is not None:
-                self._master_switch.get_characteristic("On").set_value(
-                    1 if self._coordinator.entry.data.get("master_enabled", True) else 0
-                )
-            if self._pushover_switch is not None:
-                self._pushover_switch.get_characteristic("On").set_value(
-                    1 if self._coordinator.entry.data.get("pushover_enabled", False) else 0
-                )
+
+
+    class RuntimeSwitchAccessory(Accessory):
+        """Standalone HomeKit switch accessory for runtime settings."""
+
+        category = CATEGORY_SWITCH  # type: ignore[assignment]
+
+        def __init__(
+            self,
+            driver: "AccessoryDriver",
+            display_name: str,
+            *,
+            hass: HomeAssistant,
+            serial_suffix: str,
+            getter: Callable[[], bool],
+            setter: Callable[[bool], Awaitable[None]],
+            **kwargs: Any,
+        ) -> None:
+            super().__init__(driver, display_name, **kwargs)
+            self._hass = hass
+            self._getter = getter
+            self._setter = setter
+
+            self.set_info_service(
+                manufacturer="IrrigationPro",
+                model="Runtime Switch",
+                serial_number=f"IRRIGPRO-{serial_suffix}",
+                firmware_revision="2.1.4",
+            )
+
+            svc = self.add_preload_service("Switch", chars=["Name"])
+            svc.display_name = display_name
+            svc.configure_char("Name", value=display_name)
+            svc.configure_char(
+                "On",
+                value=1 if self._getter() else 0,
+                setter_callback=self._on_set,
+            )
+            self._switch_service = svc
+
+        def _on_set(self, value: int) -> None:
+            self._hass.async_create_task(self._setter(bool(value)))
+
+        @Accessory.run_at_interval(3)
+        async def run(self) -> None:  # noqa: D102
+            self._switch_service.get_characteristic("On").set_value(
+                1 if self._getter() else 0
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +285,7 @@ class IrrigationProHomeKit:
         self.xhm_uri: str | None = None  # X-HM:// URI for QR pairing
         self.last_error: str | None = None
         self.suggested_port: int | None = None
-        self.accessory_name: str = "IrrigationPro Sprinkler"
+        self.accessory_name: str = "IrrigationPro Garden Bridge"
 
     def _is_port_available(self, port: int) -> bool:
         """Return True if a TCP bind on all interfaces would succeed."""
@@ -359,18 +362,50 @@ class IrrigationProHomeKit:
             except Exception:
                 pass
 
-            accessory = IrrigationSystemAccessory(
+            bridge = Bridge(self._driver, self.accessory_name)
+            bridge.set_info_service(
+                manufacturer="IrrigationPro",
+                model="HomeKit Bridge",
+                serial_number="IRRIGPRO-BRIDGE",
+                firmware_revision="2.1.4",
+            )
+
+            sprinkler = IrrigationSystemAccessory(
                 self._driver,
-                self.accessory_name,
+                "Sprinkler",
                 zones=self._coordinator.zones,
                 coordinator=self._coordinator,
                 hass=self._hass,
             )
-            self._driver.add_accessory(accessory)
+            mainswitch = RuntimeSwitchAccessory(
+                self._driver,
+                "Mainswitch",
+                hass=self._hass,
+                serial_suffix="MAIN",
+                getter=lambda: bool(
+                    self._coordinator.entry.data.get("master_enabled", True)
+                ),
+                setter=self._coordinator.async_set_master_enabled,
+            )
+            pushover_switch = RuntimeSwitchAccessory(
+                self._driver,
+                "Pushover",
+                hass=self._hass,
+                serial_suffix="PUSH",
+                getter=lambda: bool(
+                    self._coordinator.entry.data.get("pushover_enabled", False)
+                ),
+                setter=self._coordinator.async_set_pushover_enabled,
+            )
+
+            bridge.add_accessory(sprinkler)
+            bridge.add_accessory(mainswitch)
+            bridge.add_accessory(pushover_switch)
+            self._driver.add_accessory(bridge)
 
             # Generate the X-HM:// URI for QR code pairing
             try:
-                self.xhm_uri = accessory.xhm_uri()
+                self.xhm_uri = bridge.xhm_uri()
                 _LOGGER.info("HomeKit setup URI: %s", self.xhm_uri)
             except Exception:
                 _LOGGER.debug("Could not generate xhm_uri", exc_info=True)
