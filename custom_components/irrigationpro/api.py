@@ -20,6 +20,7 @@ from .const import (
     CONF_HOMEKIT_PORT,
     CONF_LANGUAGE,
     CONF_LOW_THRESHOLD,
+    CONF_MASTER_ENABLED,
     CONF_OWM_API_KEY,
     CONF_PUSHOVER_API_TOKEN,
     CONF_PUSHOVER_DEVICE,
@@ -58,6 +59,7 @@ from .const import (
     DEFAULT_HOMEKIT_PORT,
     DEFAULT_LANGUAGE,
     DEFAULT_LOW_THRESHOLD,
+    DEFAULT_MASTER_ENABLED,
     DEFAULT_PUSHOVER_ENABLED,
     DEFAULT_PUSHOVER_PRIORITY,
     DEFAULT_RECHECK_TIME,
@@ -598,6 +600,8 @@ class IrrigationProApiView(HomeAssistantView):
                 "available_weather_entities": sorted(
                     list(hass.states.async_entity_ids("weather"))
                 ),
+                "master_enabled": bool(coordinator.entry.data.get(CONF_MASTER_ENABLED, DEFAULT_MASTER_ENABLED)),
+                "pushover_enabled": bool(coordinator.entry.data.get(CONF_PUSHOVER_ENABLED, DEFAULT_PUSHOVER_ENABLED)),
                 "homekit_enabled": bool(coordinator.entry.data.get(CONF_HOMEKIT_ENABLED, DEFAULT_HOMEKIT_ENABLED)),
                 "homekit_port": int(coordinator.entry.data.get(CONF_HOMEKIT_PORT, DEFAULT_HOMEKIT_PORT)),
                 "homekit_pin": str(coordinator.entry.data.get(CONF_HOMEKIT_PIN, DEFAULT_HOMEKIT_PIN)),
@@ -1001,6 +1005,47 @@ class IrrigationProSettingsHomeKitView(HomeAssistantView):
         )
 
 
+class IrrigationProSettingsRuntimeView(HomeAssistantView):
+    """API view to toggle master irrigation and Pushover runtime switches."""
+
+    url = "/api/irrigationpro/settings/runtime"
+    name = "api:irrigationpro:settings_runtime"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Persist and apply runtime toggles."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            data = await request.json()
+        except Exception:
+            return self.json({"error": "invalid JSON payload"}, status_code=400)
+
+        entry_id = data.get("entry_id") if isinstance(data, dict) else None
+        coordinator = _resolve_coordinator(hass, entry_id)
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        changed: dict[str, bool] = {}
+
+        if "master_enabled" in data:
+            enabled = bool(data.get("master_enabled"))
+            await coordinator.async_set_master_enabled(enabled)
+            changed["master_enabled"] = enabled
+
+        if "pushover_enabled" in data:
+            enabled = bool(data.get("pushover_enabled"))
+            await coordinator.async_set_pushover_enabled(enabled)
+            changed["pushover_enabled"] = enabled
+
+        return self.json(
+            {
+                "status": "ok",
+                **changed,
+                "schedule_reason": getattr(coordinator, "schedule_reason", ""),
+            }
+        )
+
+
 class IrrigationProHomeKitQRView(HomeAssistantView):
     """Serve a QR code PNG for the HomeKit X-HM:// setup URI."""
 
@@ -1342,6 +1387,7 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(IrrigationProSettingsSolarView)
     hass.http.register_view(IrrigationProSettingsTemperatureView)
     hass.http.register_view(IrrigationProSettingsHomeKitView)
+    hass.http.register_view(IrrigationProSettingsRuntimeView)
     hass.http.register_view(IrrigationProHomeKitQRView)
     hass.http.register_view(IrrigationProBackupExportView)
     hass.http.register_view(IrrigationProBackupRestoreView)

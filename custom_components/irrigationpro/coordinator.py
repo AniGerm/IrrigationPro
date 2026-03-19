@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_CYCLES,
     CONF_HIGH_THRESHOLD,
+    CONF_MASTER_ENABLED,
     CONF_LANGUAGE,
     CONF_LOW_THRESHOLD,
     CONF_OWM_API_KEY,
@@ -52,6 +53,7 @@ from .const import (
     CONF_ZONES,
     DEFAULT_CYCLES,
     DEFAULT_LANGUAGE,
+    DEFAULT_MASTER_ENABLED,
     DEFAULT_ZONE_ADJUSTMENT_PERCENT,
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_DAILY_REPORT_ENABLED,
@@ -133,10 +135,15 @@ _TEXT = {
         "rain_threshold_exceeded": "Regenschwelle überschritten ({rain:.1f} mm >= {threshold} mm)",
         "no_water_needed": "Kein Wasserbedarf (ETo durch Regen gedeckt)",
         "temperature_too_low": "Temperatur zu niedrig (min: {min_temp:.1f}°C, max: {max_temp:.1f}°C – Schwelle min>= {low}°C und max>= {high}°C)",
+        "master_disabled": "Hauptschalter ist deaktiviert – Bewässerung pausiert",
         "title_watering_done": "✅ Bewässerung abgeschlossen",
         "title_watering_error": "❌ Bewässerungsfehler",
         "title_manual_start": "🚿 Manuelle Bewässerung",
         "title_manual_done": "✅ Manuelle Bewässerung beendet",
+        "title_master_off": "⏸️ Bewässerung pausiert",
+        "title_master_on": "✅ Bewässerung aktiviert",
+        "title_pushover_on": "🔔 Pushover aktiviert",
+        "title_pushover_off": "🔕 Pushover deaktiviert",
         "title_plan_today": "🗓 Bewässerung geplant",
         "title_no_watering_today": "💤 Keine Bewässerung heute",
         "title_test": "🔔 IrrigationPro Test",
@@ -156,6 +163,11 @@ _TEXT = {
         "weather_unavailable": "⚠️ Wetter-Entität nicht verfügbar – Retry alle 2 min. Prüfe die Konfiguration.",
         "manual_zone_started": "Zone «{zone}» manuell gestartet\nGeplante Dauer: {duration} min.",
         "manual_zone_stopped": "Zone «{zone}» beendet\nLaufzeit: {duration} min.\nStart: {start}\nEnde:  {end}",
+        "master_disabled_message": "Der Hauptschalter wurde ausgeschaltet. Alle laufenden Zonen wurden gestoppt und die automatische Bewässerung bleibt pausiert, bis du sie wieder aktivierst.",
+        "master_enabled_message": "Der Hauptschalter ist wieder aktiviert. Automatische und manuelle Bewässerung laufen ab jetzt wieder regulär.",
+        "pushover_enabled_message": "Pushover ist jetzt aktiviert und wird dich wieder über Starts, Stopps und wichtige Ereignisse informieren.",
+        "pushover_disabled_message": "Pushover ist jetzt deaktiviert. Ab sofort werden keine Benachrichtigungen mehr gesendet, bis du es manuell wieder aktivierst.",
+        "master_blocked_manual_start": "Manueller Start blockiert: Hauptschalter deaktiviert",
         "watering_error": "Fehler beim Bewässern: {error}",
         "weather_footer": "───\n{day}: {condition}, {clouds}% Wolken\nSonnenaufgang: {sunrise} Uhr | Luftfeuchte: {humidity:.0f}%\nTemp.: {min_temp:.1f}°C – {max_temp:.1f}°C\nLuftdruck: {pressure:.0f} hPa | Wind: {wind:.1f} m/s\nNiederschlag: {rain:.2f} mm | ETo: {eto:.2f} mm",
         "test_message": "Test-Benachrichtigung erfolgreich! Priorität: {priority}",
@@ -167,10 +179,15 @@ _TEXT = {
         "rain_threshold_exceeded": "Rain threshold exceeded ({rain:.1f} mm >= {threshold} mm)",
         "no_water_needed": "No watering needed (ETo covered by rain)",
         "temperature_too_low": "Temperature too low (min: {min_temp:.1f}°C, max: {max_temp:.1f}°C - threshold min>= {low}°C and max>= {high}°C)",
+        "master_disabled": "Master switch is off - irrigation paused",
         "title_watering_done": "✅ Watering completed",
         "title_watering_error": "❌ Watering error",
         "title_manual_start": "🚿 Manual watering",
         "title_manual_done": "✅ Manual watering finished",
+        "title_master_off": "⏸️ Irrigation paused",
+        "title_master_on": "✅ Irrigation enabled",
+        "title_pushover_on": "🔔 Pushover enabled",
+        "title_pushover_off": "🔕 Pushover disabled",
         "title_plan_today": "🗓 Irrigation scheduled",
         "title_no_watering_today": "💤 No watering today",
         "title_test": "🔔 IrrigationPro Test",
@@ -190,6 +207,11 @@ _TEXT = {
         "weather_unavailable": "⚠️ Weather entity not available – retrying every 2 min. Check configuration.",
         "manual_zone_started": "Zone «{zone}» started manually\nPlanned duration: {duration} min.",
         "manual_zone_stopped": "Zone «{zone}» finished\nRuntime: {duration} min.\nStart: {start}\nEnd:   {end}",
+        "master_disabled_message": "The master switch was turned off. All running zones were stopped and automatic irrigation will stay paused until you enable it again.",
+        "master_enabled_message": "The master switch is enabled again. Automatic and manual irrigation now run normally.",
+        "pushover_enabled_message": "Pushover is now enabled and will inform you again about starts, stops and important events.",
+        "pushover_disabled_message": "Pushover is now disabled. No notifications will be sent until you enable it manually again.",
+        "master_blocked_manual_start": "Manual start blocked: master switch disabled",
         "watering_error": "Watering error: {error}",
         "weather_footer": "───\n{day}: {condition}, {clouds}% clouds\nSunrise: {sunrise} | Humidity: {humidity:.0f}%\nTemp.: {min_temp:.1f}°C – {max_temp:.1f}°C\nPressure: {pressure:.0f} hPa | Wind: {wind:.1f} m/s\nPrecipitation: {rain:.2f} mm | ETo: {eto:.2f} mm",
         "test_message": "Test notification sent successfully! Priority: {priority}",
@@ -445,6 +467,15 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         if not self.forecast:
             _LOGGER.warning("No forecast data available for scheduling")
             return
+
+        if not self.entry.data.get(CONF_MASTER_ENABLED, DEFAULT_MASTER_ENABLED):
+            self.scheduled_run = None
+            self.recheck_scheduled = None
+            self.schedule_reason = self._txt("master_disabled")
+            for zone in self.zones:
+                zone.duration = 0
+            self.async_set_updated_data(self.data)
+            return
         
         _LOGGER.info("Calculating irrigation schedule")
         self.last_calculated = dt_util.now()
@@ -677,6 +708,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
     async def _check_schedule(self, now):
         """Check if it's time to start watering or recheck."""
+        if not self.entry.data.get(CONF_MASTER_ENABLED, DEFAULT_MASTER_ENABLED):
+            return
+
         # Check for recheck
         if self.recheck_scheduled and now >= self.recheck_scheduled:
             _LOGGER.info("Running scheduled recheck")
@@ -691,6 +725,10 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
     async def _start_watering(self):
         """Start the watering cycle."""
+        if not self.entry.data.get(CONF_MASTER_ENABLED, DEFAULT_MASTER_ENABLED):
+            _LOGGER.info("Skipping watering start because master switch is disabled")
+            return
+
         if self._watering_task and not self._watering_task.done():
             _LOGGER.warning("Watering already in progress")
             return
@@ -835,6 +873,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         zone = next((z for z in self.zones if z.zone_id == zone_id), None)
         if not zone:
             raise ValueError(f"Zone {zone_id} not found")
+
+        if not self.entry.data.get(CONF_MASTER_ENABLED, DEFAULT_MASTER_ENABLED):
+            raise ValueError(self._txt("master_blocked_manual_start"))
         
         # Cancel existing manual task for this zone if any
         if zone_id in self._manual_zone_tasks:
@@ -914,6 +955,99 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     _LOGGER.error("Failed to turn off entity '%s': %s", zone.switch_entity, err)
             
             self.async_set_updated_data(self.data)
+
+    async def async_stop_all_watering(self) -> None:
+        """Immediately stop all running watering tasks and entities."""
+        if self._watering_task and not self._watering_task.done():
+            self._watering_task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(self._watering_task), timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+
+        active_manual_tasks = list(self._manual_zone_tasks.items())
+        self._manual_zone_tasks.clear()
+        for _zone_id, task in active_manual_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
+
+        for zone in self.zones:
+            if not zone.is_running:
+                continue
+            zone.is_running = False
+            zone.started_at = None
+            if zone.switch_entity:
+                try:
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_off",
+                        {"entity_id": zone.switch_entity},
+                        blocking=True,
+                    )
+                except Exception as err:
+                    _LOGGER.error(
+                        "Failed emergency stop for entity '%s': %s",
+                        zone.switch_entity,
+                        err,
+                    )
+
+        self._watering_started_at = None
+        self.async_set_updated_data(self.data)
+
+    async def async_set_master_enabled(self, enabled: bool) -> None:
+        """Persist and apply the global master irrigation switch."""
+        self.hass.config_entries.async_update_entry(
+            self.entry,
+            data={**self.entry.data, CONF_MASTER_ENABLED: enabled},
+        )
+        self.entry = self.hass.config_entries.async_get_entry(self.entry.entry_id) or self.entry
+
+        if enabled:
+            await self._send_pushover_notification(
+                self._txt("title_master_on"),
+                self._txt("master_enabled_message"),
+                priority=0,
+                force=True,
+            )
+            if self.forecast:
+                await self._async_calculate_schedule()
+            else:
+                await self.async_request_refresh()
+        else:
+            await self.async_stop_all_watering()
+            self.scheduled_run = None
+            self.recheck_scheduled = None
+            self.schedule_reason = self._txt("master_disabled")
+            for zone in self.zones:
+                zone.duration = 0
+            self.async_set_updated_data(self.data)
+            await self._send_pushover_notification(
+                self._txt("title_master_off"),
+                self._txt("master_disabled_message"),
+                priority=1,
+                force=True,
+            )
+
+    async def async_set_pushover_enabled(self, enabled: bool) -> None:
+        """Persist and apply the Pushover notification switch."""
+        self.hass.config_entries.async_update_entry(
+            self.entry,
+            data={**self.entry.data, CONF_PUSHOVER_ENABLED: enabled},
+        )
+        self.entry = self.hass.config_entries.async_get_entry(self.entry.entry_id) or self.entry
+        await self._send_pushover_notification(
+            self._txt("title_pushover_on" if enabled else "title_pushover_off"),
+            self._txt(
+                "pushover_enabled_message" if enabled else "pushover_disabled_message"
+            ),
+            priority=0,
+            force=True,
+        )
+        self.async_set_updated_data(self.data)
 
     # ------------------------------------------------------------------
     # Notification helpers

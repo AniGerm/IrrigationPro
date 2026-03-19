@@ -34,6 +34,7 @@ CONF_RECHECK_TIME: Final = "recheck_time"
 CONF_LANGUAGE: Final = "language"
 
 # Notifications
+CONF_MASTER_ENABLED: Final = "master_enabled"
 CONF_PUSHOVER_ENABLED: Final = "pushover_enabled"
 CONF_PUSHOVER_API_TOKEN: Final = "pushover_api_token"
 CONF_PUSHOVER_USER_KEY: Final = "pushover_user_key"
@@ -61,6 +62,7 @@ DEFAULT_LOW_THRESHOLD: Final = 5
 DEFAULT_HIGH_THRESHOLD: Final = 15
 DEFAULT_RECHECK_TIME: Final = 0
 DEFAULT_LANGUAGE: Final = "de"
+DEFAULT_MASTER_ENABLED: Final = True
 DEFAULT_PUSHOVER_ENABLED: Final = False
 DEFAULT_PUSHOVER_PRIORITY: Final = 0
 DEFAULT_DAILY_REPORT_ENABLED: Final = False

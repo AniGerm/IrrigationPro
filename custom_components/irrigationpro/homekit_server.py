@@ -63,13 +63,15 @@ if HAS_HAP:
             self._hass = hass
             self._homekit_durations: dict[int, int] = {}
             self._valve_services: dict[int, Any] = {}
+            self._master_switch: Any | None = None
+            self._pushover_switch: Any | None = None
 
             # -- AccessoryInformation (shown in Apple Home → Geräteinfos) --
             self.set_info_service(
                 manufacturer="IrrigationPro",
                 model="Smart Irrigation Controller",
                 serial_number="IRRIGPRO-001",
-                firmware_revision="2.1.2",
+                firmware_revision="2.1.3",
             )
 
             # -- Primary IrrigationSystem service --
@@ -82,6 +84,36 @@ if HAS_HAP:
             irr.configure_char("RemainingDuration", value=0)
             irr.is_primary_service = True
             self._irr_service = irr
+
+            master = self.add_preload_service(
+                "Switch",
+                chars=["Name"],
+                unique_id="master-enabled",
+            )
+            master.display_name = "Hauptschalter"
+            master.configure_char("Name", value="Hauptschalter")
+            master.configure_char(
+                "On",
+                value=1 if self._coordinator.entry.data.get("master_enabled", True) else 0,
+                setter_callback=self._on_set_master_enabled,
+            )
+            irr.linked_services.append(master)
+            self._master_switch = master
+
+            pushover = self.add_preload_service(
+                "Switch",
+                chars=["Name"],
+                unique_id="pushover-enabled",
+            )
+            pushover.display_name = "Pushover"
+            pushover.configure_char("Name", value="Pushover")
+            pushover.configure_char(
+                "On",
+                value=1 if self._coordinator.entry.data.get("pushover_enabled", False) else 0,
+                setter_callback=self._on_set_pushover_enabled,
+            )
+            irr.linked_services.append(pushover)
+            self._pushover_switch = pushover
 
             # -- One Valve per zone --
             for zone in zones:
@@ -158,6 +190,18 @@ if HAS_HAP:
             """User changed SetDuration for a valve in Apple Home."""
             self._homekit_durations[zone_id] = value
 
+        def _on_set_master_enabled(self, value: int) -> None:
+            """Toggle global irrigation enable/disable from HomeKit."""
+            self._hass.async_create_task(
+                self._coordinator.async_set_master_enabled(bool(value))
+            )
+
+        def _on_set_pushover_enabled(self, value: int) -> None:
+            """Toggle Pushover notifications from HomeKit."""
+            self._hass.async_create_task(
+                self._coordinator.async_set_pushover_enabled(bool(value))
+            )
+
         # -- Periodic state sync (every 3 s) --
 
         @Accessory.run_at_interval(3)
@@ -201,6 +245,14 @@ if HAS_HAP:
             self._irr_service.get_characteristic("ProgramMode").set_value(
                 1 if self._coordinator.scheduled_run is not None else 0
             )
+            if self._master_switch is not None:
+                self._master_switch.get_characteristic("On").set_value(
+                    1 if self._coordinator.entry.data.get("master_enabled", True) else 0
+                )
+            if self._pushover_switch is not None:
+                self._pushover_switch.get_characteristic("On").set_value(
+                    1 if self._coordinator.entry.data.get("pushover_enabled", False) else 0
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +345,7 @@ class IrrigationProHomeKit:
                 loop=self._hass.loop,
                 async_zeroconf_instance=async_zc,
             )
+            assert self._driver is not None
 
             # Log the address HAP-python will actually bind to
             try:

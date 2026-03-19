@@ -1018,6 +1018,20 @@
       <span class="status-label">HomeKit</span>
       <span class="status-value" id="hkStatusValue" style="text-decoration:underline dotted">--</span>
     </div>
+    <div class="status-item" title="Gesamte Bewässerung aktivieren oder pausieren">
+      <span class="status-label" data-i18n="status.master_switch">Hauptschalter</span>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="masterEnabledToggle" onchange="toggleRuntimeSetting('master_enabled', this.checked)">
+        <span class="status-value" id="masterEnabledLabel">--</span>
+      </label>
+    </div>
+    <div class="status-item" title="Pushover-Benachrichtigungen aktivieren oder deaktivieren">
+      <span class="status-label" data-i18n="status.pushover_switch">Pushover</span>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="pushoverEnabledToggle" onchange="toggleRuntimeSetting('pushover_enabled', this.checked)">
+        <span class="status-value" id="pushoverEnabledLabel">--</span>
+      </label>
+    </div>
   </div>
 
   <div class="grid" id="zonesContainer">
@@ -1059,6 +1073,8 @@
         'status.last_update': 'Letztes Update',
         'status.month_value': 'Monatswert (Solar)',
         'status.temp_threshold': 'Temperaturschwelle',
+        'status.master_switch': 'Hauptschalter',
+        'status.pushover_switch': 'Pushover',
         'zone.disabled': 'Deaktiviert',
         'zone.running': '● Aktiv',
         'zone.idle': 'Bereit',
@@ -1109,6 +1125,14 @@
         'toast.zone_enabled': 'Zone {id} aktiviert',
         'toast.zone_disabled': 'Zone {id} deaktiviert',
         'toast.recalculate': 'Neuberechnung gestartet',
+        'toast.master_on': '✅ Bewässerung aktiviert',
+        'toast.master_off': '⏸️ Bewässerung pausiert',
+        'toast.pushover_on': '🔔 Pushover aktiviert',
+        'toast.pushover_off': '🔕 Pushover deaktiviert',
+        'runtime.on': 'Aktiv',
+        'runtime.off': 'Pausiert',
+        'runtime.pushover_on': 'Aktiv',
+        'runtime.pushover_off': 'Aus',
         'auth.title': '🔐 Authentifizierung fehlgeschlagen (401). Erzeuge in HA unter Profil → Sicherheit → Langlebige Zugriffstoken einen Token.',
         'auth.placeholder': 'Token einfügen…',
         'auth.save': 'Speichern',
@@ -1254,6 +1278,8 @@
         'status.last_update': 'Last Update',
         'status.month_value': 'Monthly value (solar)',
         'status.temp_threshold': 'Temperature threshold',
+        'status.master_switch': 'Master switch',
+        'status.pushover_switch': 'Pushover',
         'zone.disabled': 'Disabled',
         'zone.running': '● Active',
         'zone.idle': 'Ready',
@@ -1304,6 +1330,14 @@
         'toast.zone_enabled': 'Zone {id} enabled',
         'toast.zone_disabled': 'Zone {id} disabled',
         'toast.recalculate': 'Recalculation started',
+        'toast.master_on': '✅ Irrigation enabled',
+        'toast.master_off': '⏸️ Irrigation paused',
+        'toast.pushover_on': '🔔 Pushover enabled',
+        'toast.pushover_off': '🔕 Pushover disabled',
+        'runtime.on': 'Enabled',
+        'runtime.off': 'Paused',
+        'runtime.pushover_on': 'Enabled',
+        'runtime.pushover_off': 'Off',
         'auth.title': '🔐 Authentication failed (401). Create a long-lived access token in HA under Profile → Security → Long-Lived Access Tokens.',
         'auth.placeholder': 'Paste token…',
         'auth.save': 'Save',
@@ -1441,7 +1475,7 @@
       }
     };
 
-    const UI_VERSION = '2.1.2';
+    const UI_VERSION = '2.1.3';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -2114,6 +2148,18 @@
         if (entry.homekit_running) hkEl.textContent = '✅ Port ' + (entry.homekit_port || 21064);
         else if (entry.homekit_enabled) hkEl.textContent = '⏹ Gestoppt';
         else hkEl.textContent = '—';
+      }
+      const masterToggle = document.getElementById('masterEnabledToggle');
+      const masterLabel = document.getElementById('masterEnabledLabel');
+      if (masterToggle && masterLabel) {
+        masterToggle.checked = !!entry.master_enabled;
+        masterLabel.textContent = entry.master_enabled ? t('runtime.on') : t('runtime.off');
+      }
+      const pushoverToggle = document.getElementById('pushoverEnabledToggle');
+      const pushoverLabel = document.getElementById('pushoverEnabledLabel');
+      if (pushoverToggle && pushoverLabel) {
+        pushoverToggle.checked = !!entry.pushover_enabled;
+        pushoverLabel.textContent = entry.pushover_enabled ? t('runtime.pushover_on') : t('runtime.pushover_off');
       }
 
       // Reason why no schedule
@@ -2793,6 +2839,34 @@
       } finally {
         btn.disabled = false;
         btn.textContent = prevLabel;
+      }
+    }
+
+    async function toggleRuntimeSetting(key, enabled) {
+      const entryId = _lastData?.entries?.[0]?.entry_id;
+      try {
+        const resp = await fetch(API_BASE + '/settings/runtime', {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ entry_id: entryId, [key]: enabled })
+        });
+        if (resp.status === 401) { resetAuth(); showAuthBanner(); return; }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+        showToast(
+          key === 'master_enabled'
+            ? (enabled ? t('toast.master_on') : t('toast.master_off'))
+            : (enabled ? t('toast.pushover_on') : t('toast.pushover_off')),
+          'success'
+        );
+        _setRefreshInterval(2000);
+        setTimeout(() => {
+          if (!_lastData?.entries?.some(e => e.zones?.some(z => z.is_running))) _setRefreshInterval(30000);
+        }, 12000);
+        await loadData();
+      } catch (err) {
+        showToast((lang === 'de' ? 'Fehler: ' : 'Error: ') + err.message, 'error');
+        await loadData();
       }
     }
 
