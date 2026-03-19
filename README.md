@@ -8,9 +8,12 @@
 
 ## English
 
-IrrigationPro is a scientifically based irrigation controller for Home Assistant. The integration calculates water demand per zone based on FAO-56 Penman-Monteith evapotranspiration, provides a dedicated dashboard in the Home Assistant frontend, supports backup and restore of the configuration, and can optionally offer a native HomeKit sprinkler bridge.
+IrrigationPro is a scientifically based irrigation controller for Home Assistant. The integration calculates water demand per zone based on 
+FAO-56 Penman-Monteith evapotranspiration, provides a dedicated dashboard in the Home Assistant frontend, supports backup and restore of 
+the configuration, and can optionally offer a native HomeKit sprinkler bridge.
 
-The current stable release is version 2.1.8. This repository is structured as a HACS custom repository and already includes the required validation workflows for HACS and hassfest.
+The current stable release is version 2.1.8. This repository is structured as a HACS custom repository and already includes the required 
+validation workflows for HACS and hassfest.
 
 ## Features
 
@@ -43,7 +46,8 @@ The current stable release is version 2.1.8. This repository is structured as a 
 4. Add https://github.com/AniGerm/IrrigationPro as an integration.
 5. Install IrrigationPro and restart Home Assistant.
 
-Note: As long as the repository is not yet included in the HACS default list, installation is done via Custom Repositories. After successful inclusion in HACS, IrrigationPro can be found directly via search.
+Note: As long as the repository is not yet included in the HACS default list, installation is done via Custom Repositories. After 
+successful inclusion in HACS, IrrigationPro can be found directly via search.
 
 ### Manual
 
@@ -151,83 +155,6 @@ Forces a recalculation of the irrigation schedule.
 service: irrigationpro.recalculate
 ```
 
-## Backup & Restore
-
-The integration supports export and restore of the complete configuration.
-
-- Native backup format: irrigationpro-backup-v1
-- Legacy import from SmartSprinklers-like setups
-- Zone-specific weekdays and months are preserved
-- Restore via dashboard API with prepared validation and editing step
-
-A conversion script for legacy data is also provided:
-
-- tools/convert_legacy_setup_to_backup.py
-
-## Behavior When Weather Data Is Missing
-
-If the configured weather entity is temporarily unavailable at startup or runtime, the integration stays loaded. IrrigationPro puts scheduling into a safe waiting state and automatically retries fetching weather data every 2 minutes until a valid forecast is available again.
-
-## Automations
-
-IrrigationPro does not control real hardware directly. The actual valve switching is done via your existing Home Assistant entities and automations.
-
-Example:
-
-```yaml
-automation:
-  - alias: "Irrigation Zone 1 - Control valve"
-    trigger:
-      - platform: state
-        entity_id: switch.irrigation_zone_1
-    action:
-      - service: switch.turn_{{ trigger.to_state.state }}
-        target:
-          entity_id: switch.gardena_valve_1
-```
-
-## Scientific Background
-
-The reference evapotranspiration is calculated according to FAO-56. Among other things, the following are taken into account:
-
-- Min/Max temperature
-- Relative humidity
-- Wind speed
-- Solar radiation
-- Atmospheric pressure
-- Geographic location and season
-
-In simplified form:
-
-```text
-Water demand = (ETo - rain) × crop coefficient × plant density × exposure factor × area / efficiency
-Duration = water demand / (flow rate × number of emitters)
-```
-
-## Troubleshooting
-
-### Keine Bewässerung geplant
-
-- Prüfe, ob die Temperaturschwellen erreicht wurden.
-- Prüfe, ob die Zone aktiviert ist.
-- Prüfe, ob Wetterdaten verfügbar sind.
-- Prüfe die Logs von custom_components.irrigationpro.
-
-### HomeKit startet nicht
-
-- Prüfe, ob der konfigurierte HAP-Port frei ist.
-- Prüfe, ob HAP-python installiert wurde.
-- Prüfe, ob Apple Home noch eine alte Bridge-Konfiguration zwischengespeichert hat.
-
-### Debug Logging
-
-```yaml
-logger:
-  default: info
-  logs:
-    custom_components.irrigationpro: debug
-```
-
 ## Support
 
 - GitHub Issues: [Issues](https://github.com/AniGerm/IrrigationPro/issues)
@@ -247,11 +174,146 @@ logger:
 3. Committe deine Änderungen.
 4. Öffne einen Pull Request.
 
-## Lizenz
+## Licence
 
-MIT License, siehe [LICENSE](LICENSE).
+MIT License, see [LICENSE](LICENSE).
 
-## Danksagung
+## Acknowledgement
 
-- [MTry/homebridge-smart-irrigation](https://github.com/MTry/homebridge-smart-irrigation) für die ursprüngliche Idee
-- [FAO Irrigation and Drainage Paper No. 56](http://www.fao.org/3/X0490E/x0490e00.htm) für die wissenschaftliche Grundlage
+- [MTry/homebridge-smart-irrigation](https://github.com/MTry/homebridge-smart-irrigation) for the original idea
+- [FAO Irrigation and Drainage Paper No. 56](http://www.fao.org/3/X0490E/x0490e00.htm) for the scientific basis
+
+## Deutsch
+
+IrrigationPro ist ein irrigationssteuerndes Addon für Home Assistant, das die Wasserdüngung pro Zone auf der Basis von FAO-56 Penman-Monteith berechnet und 
+einen eigenen Dashboard in der Frontend-Benutzeroberfläche von Home Assistant bietet. Die Komponente unterstützt zudem den Backup und Restore des 
+Konfigurationsspeichers und kann optionale Unterstützung für einen HomeKit-Bewässerungsbereich anbieten.
+
+Die aktuelle stabile Version ist 2.1.8. Das Repository ist als Custom Repository für HACS strukturiert und enthält bereits die benötigten 
+Validierungsworkflows für HACS und Hassfest.
+
+## Funktionen
+
+- Anpassung des Bewässerungsprogramms an den Klimaverlauf für bis zu 16 Zonen
+- Native Home Assistant Integration mit Flow, Services und Dashboardpanel
+- Native HomeKit-Bewässerungsbereich mit QR-Code-Paring, automatischer Portsuche, Zonen, Laufdauer und separaten Laufschalter
+- Masterschalter zum globalen Pause/Fortsetzen des Bewässerns
+- Pushover-Benachrichtigungen über die API
+- Morgendiätendurchsicht mit geplantem Bewässerungsplan und Wettervoraussagen
+- Backup, Restore und Vorbereitung der Legacy-Importierung der gesamten Konfiguration
+- Spracheinstellung DE/EN im Benutzerinterface und Laufschalterbenachrichtigungen
+- Home Assistant Wetterdaten oder OpenWeatherMap als Fallback
+- Stabiler Start auch wenn die Wetterdaten vorübergehend nicht verfügbar sind
+- Zonenspezifische Konfiguration von Wochentagen, Monaten, Anpassungsparametern und Laufdiagnostik
+
+## Voraussetzungen
+
+- Home Assistant 2023.1 oder höher
+- Mindestens ein switchbares Bewässerungssystem in Home Assistant
+- Eine Wetterdatenquelle in Home Assistant oder alternativ eine OpenWeatherMap API-Schlüssel
+- Optional: frei verfügbarer TCP-Port für den HAP-Server bei HomeKit
+
+## Installation
+
+### HACS
+
+1. Öffne HACS in Home Assistant.
+2. Gehe zu Integrationen.
+3. Klicke auf das Menü am oberen rechten Rand und wähle Custom Repositories aus.
+4. Füge https://github.com/AniGerm/IrrigationPro hinzu.
+5. Installiere IrrigationPro und start Home Assistant neu.
+
+Note: Bis das Repository in die Standardliste von HACS aufgenommen wird, muss es über Custom Repositories installiert werden. Nach erfolgreicher Aufnahme kann 
+IrrigationPro direkt über die Suche gefunden werden.
+
+### Manual
+
+1. Kopiere den Ordner custom_components/irrigationpro in config/custom_components/.
+2. Starte Home Assistant neu.
+
+## Konfiguration
+
+1. Öffne Einstellungen → Geräte und Dienste.
+2. Klicke auf "Add Integration" und suche nach IrrigationPro.
+3. Folge der Anleitung für die Wetterquelle, Zonen und Programmierung.
+
+Wichtige Konfigurationspunkte:
+
+- Zonebezeichnung, Fläche, Wasserdüngungsrate, Anzahl von Ausläufern, Effizienz, Koeffizient des Wasserverbrauchs, Pflanzenanzahl und Belüftungskoeffizient
+- Wochentage und Monate pro Zone
+- Regenwurfschwelle, Regenfaktor und maximale Laufdauer
+- Sonnenaufgangswinkel, Zyklen, Temperaturschwellen und Prüfläufe
+- Spracheinstellung, Pushover, Morgendiätendurchsicht und HomeKit
+
+## Dashboard und Lauffunktionen
+
+Das integrierte Dashboard bietet:
+
+- Übersicht über den Zustand von Laufdauer, Wetterdaten und Programmierung
+- Karten für jede Zone mit manuellem Start und Stopp
+- Laufschalter für Masterschalter und Pushover
+- Backup-/Restore-Dialog mit nativer Import-Export-Unterstützung und Vorbereitung der Legacy-Importierung
+- HomeKit-Dialog mit Port, Pin, QR-Code und Hinweis auf verfügbare Alternativen
+- Testfunktionen für Relays, Programmierung und Pushover
+- Status- und Diagnosewerte für Laufdauer, ETo, Regenmenge, Wasserdüngung und nächster Start
+
+## HomeKit
+
+Wenn HomeKit aktiviert ist, startet IrrigationPro sein eigenes native HAP-Bridge.
+
+Es werden folgende Funktionen angeboten:
+
+- Ein eigener Bewässerungsbereich in Apple Home
+- Eine Mapping-Funktion für jede Zone für die Verwaltung der Valves
+- Separate Masterschalter als HomeKit-Switch und separate Pushover-Benachrichtigungsschalter
+- QR-Code-Paring und automatische Portsuche
+- AccessoryInformation mit Hersteller, Modellnummer, Seriennummer und Firmwareversion
+
+Notizen:
+
+- Der konfigurierte HAP-Port muss frei sein und darf nicht mit einem bestehenden Home Assistant HomeKit Bridge konflizieren.
+- Sollte der konfigurierte Port bereits belegt sein, wird IrrigationPro einen freien alternativen Vorschlag machen.
+- Nach einer strukturellen Änderung im HomeKit kann es erforderlich sein, den Bridge neu zuzupaaren in Apple Home.
+
+## Pushover und Morgendiätendurchsicht
+
+IrrigationPro kommuniziert direkt mit der Pushover API. Eine separate Home Assistant-Pushover Integration ist nicht notwendig.
+
+Unterstützte Funktionen:
+
+- Start- und Stoppbenachrichtigungen
+- Zone-Startbenachrichtigungen
+- Fehlerbenachrichtigungen
+- Morgendiätendurchsicht mit geplantem Bewässerungsplan und Wettervoraussagen
+- Laufschalter direkt aus dem Dashboard und HomeKit
+
+## Entitäten
+
+Es werden für jede Zone folgende Entitäten erstellt:
+
+- switch.irrigation_zone_X
+- valve.irrigation_zone_X
+- sensor.irrigation_zone_X_duration
+- sensor.irrigation_zone_X_eto
+- sensor.irrigation_zone_X_next_run
+- binary_sensor.irrigation_zone_X_running
+
+## Unterstützung
+
+- GitHub Issues: [Issues](https://github.com/AniGerm/IrrigationPro/issues)
+- Home Assistant Community: [Community](https://community.home-assistant.io/)
+
+## Release-Workflow
+
+- Vor einer Veröffentlichung auf HACS sollte die Validierung und Hassfest grün sein.
+- Für die Aufnahme in die Standardliste ist ein echtes GitHub Release erforderlich; ein Tag allein reicht dafür nicht aus.
+- Repositorybeschreibungen, Topics und aktivierte Issues werden in GitHub geprüft und sollten vor dem Einreichen gesetzt sein.
+- Historische rote Workflowläufe bleiben in GitHub sichtbar; Bereinigungsarbeiten finden nur für künftige Läufe statt.
+
+## Beitragen
+
+1. Klone das Repository.
+2. Erzeuge einen Feature-Branch.
+3. Kommite deine Änderungen.
+4. Öffne einen Pull Request.
+
