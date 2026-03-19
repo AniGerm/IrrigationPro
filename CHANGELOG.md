@@ -5,6 +5,16 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.1.8] - 2026-03-19
+
+### Behoben
+- GitHub Actions Validate-Workflow für aktuelle GitHub Runner und Action-Auflösung stabilisiert
+- Hassfest-Anforderungen für Komponenten-Abhängigkeiten im Manifest ergänzt
+- Manifest-Schlüsselreihenfolge an Hassfest angepasst
+
+### Geändert
+- Release-Stand nach den abschließenden HACS- und CI-Fixes auf 2.1.8 angehoben
+
 ## [2.1.7] - 2026-03-19
 
 ### Behoben

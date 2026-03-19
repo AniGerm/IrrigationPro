@@ -6,7 +6,7 @@
 
 IrrigationPro ist eine wissenschaftlich fundierte Bewässerungssteuerung für Home Assistant. Die Integration berechnet den Wasserbedarf pro Zone auf Basis der FAO-56 Penman-Monteith Evapotranspiration, bietet ein eigenes Dashboard im Home Assistant Frontend, unterstützt Backup und Restore der Konfiguration und kann optional eine native HomeKit-Sprinkler-Bridge bereitstellen.
 
-Der aktuelle veröffentlichungsreife Stand ist Version 2.1.7. Das Repository ist als HACS-Custom-Repository strukturiert und enthält bereits die nötigen Validierungs-Workflows für HACS und Hassfest.
+Der aktuelle veröffentlichungsreife Stand ist Version 2.1.8. Das Repository ist als HACS-Custom-Repository strukturiert und enthält bereits die nötigen Validierungs-Workflows für HACS und Hassfest.
 
 ## Features
 
