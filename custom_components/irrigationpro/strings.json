@@ -36,7 +36,12 @@
           "zone_weekdays": "Watering weekdays",
           "zone_months": "Watering months",
           "zone_enabled": "Zone enabled",
-          "zone_adaptive": "Adaptive watering"
+          "zone_adaptive": "Adaptive watering",
+          "zone_vegetation_type": "Vegetation type",
+          "zone_soil_moisture_entity": "Soil moisture sensor (optional)",
+          "zone_target_moisture_min": "Target moisture min (%)",
+          "zone_target_moisture_max": "Target moisture max (%)",
+          "zone_learning_enabled": "Enable automatic learning"
         }
       },
       "scheduling": {

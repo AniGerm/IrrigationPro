@@ -36,13 +36,18 @@ from .const import (
     CONF_ZONE_ENABLED,
     CONF_ZONE_EXPOSURE_FACTOR,
     CONF_ZONE_FLOW_RATE,
+    CONF_ZONE_LEARNING_ENABLED,
     CONF_ZONE_MAX_DURATION,
     CONF_ZONE_MONTHS,
     CONF_ZONE_NAME,
     CONF_ZONE_PLANT_DENSITY,
     CONF_ZONE_RAIN_FACTORING,
     CONF_ZONE_RAIN_THRESHOLD,
+    CONF_ZONE_SOIL_MOISTURE_ENTITY,
     CONF_ZONE_SWITCH_ENTITY,
+    CONF_ZONE_TARGET_MOISTURE_MAX,
+    CONF_ZONE_TARGET_MOISTURE_MIN,
+    CONF_ZONE_VEGETATION_TYPE,
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_CYCLES,
@@ -65,11 +70,14 @@ from .const import (
     DEFAULT_ZONE_ENABLED,
     DEFAULT_ZONE_EXPOSURE_FACTOR,
     DEFAULT_ZONE_FLOW_RATE,
+    DEFAULT_ZONE_LEARNING_ENABLED,
     DEFAULT_ZONE_MAX_DURATION,
     DEFAULT_ZONE_RAIN_FACTORING,
     DEFAULT_ZONE_RAIN_THRESHOLD,
+    DEFAULT_ZONE_VEGETATION_TYPE,
     DOMAIN,
     MONTHS,
+    VEGETATION_TYPES,
     WEEKDAYS,
 )
 
@@ -355,6 +363,53 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow):
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_ZONE_ADAPTIVE, default=DEFAULT_ZONE_ADAPTIVE
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_ZONE_VEGETATION_TYPE, default=DEFAULT_ZONE_VEGETATION_TYPE
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(
+                                value=key,
+                                label=veg["name_en"],
+                            )
+                            for key, veg in VEGETATION_TYPES.items()
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_ZONE_SOIL_MOISTURE_ENTITY
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor",
+                        device_class="moisture",
+                    )
+                ),
+                vol.Optional(
+                    CONF_ZONE_TARGET_MOISTURE_MIN
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5,
+                        max=60,
+                        step=1,
+                        unit_of_measurement="%",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_ZONE_TARGET_MOISTURE_MAX
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=10,
+                        max=70,
+                        step=1,
+                        unit_of_measurement="%",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_ZONE_LEARNING_ENABLED, default=DEFAULT_ZONE_LEARNING_ENABLED
                 ): selector.BooleanSelector(),
             }
         )

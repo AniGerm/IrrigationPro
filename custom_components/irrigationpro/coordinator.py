@@ -42,19 +42,26 @@ from .const import (
     CONF_ZONE_ENABLED,
     CONF_ZONE_EXPOSURE_FACTOR,
     CONF_ZONE_FLOW_RATE,
+    CONF_ZONE_LEARNING_ENABLED,
     CONF_ZONE_MAX_DURATION,
     CONF_ZONE_MONTHS,
     CONF_ZONE_NAME,
     CONF_ZONE_PLANT_DENSITY,
     CONF_ZONE_RAIN_FACTORING,
     CONF_ZONE_RAIN_THRESHOLD,
+    CONF_ZONE_SOIL_MOISTURE_ENTITY,
     CONF_ZONE_SWITCH_ENTITY,
+    CONF_ZONE_TARGET_MOISTURE_MAX,
+    CONF_ZONE_TARGET_MOISTURE_MIN,
+    CONF_ZONE_VEGETATION_TYPE,
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_CYCLES,
     DEFAULT_LANGUAGE,
     DEFAULT_MASTER_ENABLED,
     DEFAULT_ZONE_ADJUSTMENT_PERCENT,
+    DEFAULT_ZONE_LEARNING_ENABLED,
+    DEFAULT_ZONE_VEGETATION_TYPE,
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_DAILY_REPORT_ENABLED,
     DEFAULT_DAILY_REPORT_HOUR,
@@ -62,9 +69,11 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
     UPDATE_INTERVAL_MINUTES,
+    VEGETATION_TYPES,
     WEEKDAYS,
 )
 from .eto import calculate_eto
+from .learning import FeedbackCollector, get_vegetation_defaults
 from .weather_provider import WeatherData, WeatherProvider
 
 _LOGGER = logging.getLogger(__name__)
@@ -171,6 +180,8 @@ _TEXT = {
         "watering_error": "Fehler beim Bewässern: {error}",
         "weather_footer": "───\n{day}: {condition}, {clouds}% Wolken\nSonnenaufgang: {sunrise} Uhr | Luftfeuchte: {humidity:.0f}%\nTemp.: {min_temp:.1f}°C – {max_temp:.1f}°C\nLuftdruck: {pressure:.0f} hPa | Wind: {wind:.1f} m/s\nNiederschlag: {rain:.2f} mm | ETo: {eto:.2f} mm",
         "test_message": "Test-Benachrichtigung erfolgreich! Priorität: {priority}",
+        "learning_feedback_scheduled": "Bodenfeuchtesensor-Auswertung für Zone «{zone}» in {hours}h geplant",
+        "learning_correction_updated": "Zone «{zone}» Lernkorrektur aktualisiert: {factor:.1%} (Konfidenz: {confidence})",
     },
     "en": {
         "zone_disabled": "Zone disabled",
@@ -215,6 +226,8 @@ _TEXT = {
         "watering_error": "Watering error: {error}",
         "weather_footer": "───\n{day}: {condition}, {clouds}% clouds\nSunrise: {sunrise} | Humidity: {humidity:.0f}%\nTemp.: {min_temp:.1f}°C – {max_temp:.1f}°C\nPressure: {pressure:.0f} hPa | Wind: {wind:.1f} m/s\nPrecipitation: {rain:.2f} mm | ETo: {eto:.2f} mm",
         "test_message": "Test notification sent successfully! Priority: {priority}",
+        "learning_feedback_scheduled": "Soil moisture feedback for zone «{zone}» scheduled in {hours}h",
+        "learning_correction_updated": "Zone «{zone}» learning correction updated: {factor:.1%} (confidence: {confidence})",
     },
 }
 
@@ -243,6 +256,18 @@ class ZoneData:
         # Use CONF keys for weekdays and months with proper defaults
         self.weekdays = config.get(CONF_ZONE_WEEKDAYS, WEEKDAYS)
         self.months = config.get(CONF_ZONE_MONTHS, list(range(1, 13)))
+        
+        # Soil moisture learning
+        self.vegetation_type = config.get(CONF_ZONE_VEGETATION_TYPE, DEFAULT_ZONE_VEGETATION_TYPE)
+        self.soil_moisture_entity = config.get(CONF_ZONE_SOIL_MOISTURE_ENTITY)
+        veg_defaults = get_vegetation_defaults(self.vegetation_type)
+        self.target_moisture_min = config.get(CONF_ZONE_TARGET_MOISTURE_MIN) or veg_defaults[0]
+        self.target_moisture_max = config.get(CONF_ZONE_TARGET_MOISTURE_MAX) or veg_defaults[1]
+        self.learning_enabled = config.get(CONF_ZONE_LEARNING_ENABLED, DEFAULT_ZONE_LEARNING_ENABLED)
+        
+        # Learning runtime data (set by coordinator from FeedbackCollector)
+        self.learning_correction: float = 1.0
+        self.learning_confidence: int = 0
         
         # Runtime data
         self.duration = 0  # Minutes for next run
@@ -288,6 +313,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._daily_report_unsub = None
         self._watering_started_at: datetime | None = None
         self.homekit_server = None  # Set by __init__.py if HomeKit enabled
+        
+        # Soil moisture learning
+        self.feedback_collector = FeedbackCollector(hass, entry.entry_id)
         
         # Validate configuration
         if not entry.data.get(CONF_WEATHER_ENTITY):
@@ -342,10 +370,20 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Error initializing zones: %s", err, exc_info=True)
             raise ValueError(f"Failed to initialize zones: {err}") from err
 
+    def _sync_learning_to_zones(self) -> None:
+        """Copy learning correction factors from FeedbackCollector to ZoneData."""
+        for zone in self.zones:
+            zone.learning_correction = self.feedback_collector.get_correction_factor(zone.zone_id)
+            zone.learning_confidence = self.feedback_collector.get_confidence(zone.zone_id)
+
     async def async_config_entry_first_refresh(self):
         """Refresh data for the first time when config entry is setup."""
         # Load stored data
         await self._async_load_storage()
+        
+        # Load learning data
+        await self.feedback_collector.async_load()
+        self._sync_learning_to_zones()
         
         # Perform first refresh
         await super().async_config_entry_first_refresh()
@@ -657,6 +695,13 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
         # Apply user tweak factor (e.g. 110% for slightly more water)
         water_needed = water_needed * max(10, float(zone.adjustment_percent)) / 100.0
+
+        # Apply soil moisture learning correction factor
+        if zone.learning_enabled and zone.soil_moisture_entity:
+            learning_factor = self.feedback_collector.get_correction_factor(zone.zone_id)
+            water_needed = water_needed * learning_factor
+            zone.learning_correction = learning_factor
+            zone.learning_confidence = self.feedback_collector.get_confidence(zone.zone_id)
         
         # Adjust for efficiency
         water_needed = water_needed * 100 / zone.efficiency
@@ -807,6 +852,16 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         zone.started_at = dt_util.now()
         zone_planned_duration = zone.duration
         
+        # Read soil moisture BEFORE watering (for learning)
+        moisture_before = None
+        if zone.learning_enabled and zone.soil_moisture_entity:
+            moisture_before = self.feedback_collector.read_soil_moisture(zone.soil_moisture_entity)
+            if moisture_before is not None:
+                _LOGGER.debug(
+                    "Zone '%s': soil moisture before watering = %.1f%%",
+                    zone.name, moisture_before,
+                )
+        
         # Turn on the actual switch/valve entity
         if zone.switch_entity:
             try:
@@ -843,6 +898,20 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             if zone.started_at:
                 actual_min = round((ts_end - zone.started_at).total_seconds() / 60, 1)
                 self._log_zone_run(zone, zone.started_at, ts_end, zone_planned_duration, actual_min)
+
+            # Schedule soil moisture feedback reading (learning)
+            if zone.learning_enabled and zone.soil_moisture_entity:
+                self.feedback_collector.schedule_feedback(
+                    zone_id=zone.zone_id,
+                    moisture_entity=zone.soil_moisture_entity,
+                    moisture_before=moisture_before,
+                    watering_duration=zone_planned_duration,
+                    target_min=zone.target_moisture_min,
+                    target_max=zone.target_moisture_max,
+                    eto_total=zone.eto_total,
+                    rain_total=zone.rain_total,
+                )
+
             # Always turn off when done (even if cancelled)
             if zone.switch_entity:
                 try:
@@ -1278,6 +1347,21 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             await self._async_calculate_schedule()
         self.async_set_updated_data(self.data)
 
+    async def async_reset_learning(self, zone_id: int | None = None) -> None:
+        """Reset learning data for a zone (or all zones if zone_id is None)."""
+        if zone_id is not None:
+            await self.feedback_collector.async_reset_zone(zone_id)
+            zone = next((z for z in self.zones if z.zone_id == zone_id), None)
+            if zone:
+                zone.learning_correction = 1.0
+                zone.learning_confidence = 0
+        else:
+            await self.feedback_collector.async_reset_all()
+            for zone in self.zones:
+                zone.learning_correction = 1.0
+                zone.learning_confidence = 0
+        self.async_set_updated_data(self.data)
+
     async def async_test_schedule(self) -> dict:
         """Simulate schedule with spoofed hot/dry weather (read-only, does not modify real state)."""
         lat = self.hass.config.latitude
@@ -1499,6 +1583,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
         if self._daily_report_unsub:
             self._daily_report_unsub()
+
+        # Cancel any pending soil moisture feedback timers
+        self.feedback_collector.cancel_all_pending()
 
         if self._watering_task and not self._watering_task.done():
             self._watering_task.cancel()

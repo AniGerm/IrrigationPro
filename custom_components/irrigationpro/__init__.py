@@ -26,6 +26,7 @@ from .const import (
     DEFAULT_HOMEKIT_PORT,
     DOMAIN,
     SERVICE_RECALCULATE,
+    SERVICE_RESET_LEARNING,
     SERVICE_START_ZONE,
     SERVICE_STOP_ZONE,
 )
@@ -146,7 +147,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Unregister services if this was the last entry
         if not hass.data[DOMAIN]:
-            for service_name in (SERVICE_START_ZONE, SERVICE_STOP_ZONE, SERVICE_RECALCULATE):
+            for service_name in (SERVICE_START_ZONE, SERVICE_STOP_ZONE, SERVICE_RECALCULATE, SERVICE_RESET_LEARNING):
                 hass.services.async_remove(DOMAIN, service_name)
             # Remove panel
             async_remove_panel(hass, DOMAIN)
@@ -229,6 +230,13 @@ async def async_setup_services(
         for entry_id, coordinator in hass.data.get(DOMAIN, {}).items():
             await coordinator.async_refresh()
 
+    async def handle_reset_learning(call: ServiceCall) -> None:
+        """Handle the reset_learning service call."""
+        zone_id = call.data.get(ATTR_ZONE_ID)
+        _LOGGER.info("Service call: reset_learning (zone_id=%s)", zone_id)
+        for entry_id, coordinator in hass.data.get(DOMAIN, {}).items():
+            await coordinator.async_reset_learning(zone_id)
+
     # Register services
     hass.services.async_register(
         DOMAIN,
@@ -254,4 +262,11 @@ async def async_setup_services(
         SERVICE_RECALCULATE,
         handle_recalculate,
         schema=vol.Schema({}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_LEARNING,
+        handle_reset_learning,
+        schema=vol.Schema({vol.Optional(ATTR_ZONE_ID): cv.positive_int}),
     )

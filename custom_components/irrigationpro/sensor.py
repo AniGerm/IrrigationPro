@@ -35,6 +35,11 @@ async def async_setup_entry(
         entities.append(ZoneDurationSensor(coordinator, zone))
         entities.append(ZoneEtoSensor(coordinator, zone))
         entities.append(ZoneNextRunSensor(coordinator, zone))
+        # Learning sensors — only if a soil moisture entity is configured
+        if zone.soil_moisture_entity:
+            entities.append(ZoneSoilMoistureSensor(coordinator, zone))
+            entities.append(ZoneLearningCorrectionSensor(coordinator, zone))
+            entities.append(ZoneLearningConfidenceSensor(coordinator, zone))
 
     async_add_entities(entities)
 
@@ -162,4 +167,108 @@ class ZoneNextRunSensor(IrrigationSensorBase):
             "zone_id": self.zone.zone_id,
             "last_run": self.zone.last_run.isoformat() if self.zone.last_run else None,
             "is_running": self.zone.is_running,
+        }
+
+
+class ZoneSoilMoistureSensor(IrrigationSensorBase):
+    """Sensor that mirrors the configured soil moisture sensor value for a zone."""
+
+    def __init__(self, coordinator: SmartIrrigationCoordinator, zone: ZoneData):
+        """Initialize the sensor."""
+        super().__init__(coordinator, zone)
+        self._attr_name = f"{zone.name} Soil Moisture"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{coordinator.entry.entry_id}_zone_{zone.zone_id}_soil_moisture"
+        )
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_device_class = SensorDeviceClass.MOISTURE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current soil moisture reading."""
+        if not self.zone.soil_moisture_entity:
+            return None
+        state = self.hass.states.get(self.zone.soil_moisture_entity)
+        if state is None or state.state in ("unknown", "unavailable", None):
+            return None
+        try:
+            return round(float(state.state), 1)
+        except (ValueError, TypeError):
+            return None
+
+    @property
+    def icon(self) -> str:
+        return "mdi:water-thermometer-outline"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "zone_id": self.zone.zone_id,
+            "source_entity": self.zone.soil_moisture_entity,
+            "vegetation_type": self.zone.vegetation_type,
+            "target_min": self.zone.target_moisture_min,
+            "target_max": self.zone.target_moisture_max,
+        }
+
+
+class ZoneLearningCorrectionSensor(IrrigationSensorBase):
+    """Sensor showing the current learning correction factor for a zone."""
+
+    def __init__(self, coordinator: SmartIrrigationCoordinator, zone: ZoneData):
+        """Initialize the sensor."""
+        super().__init__(coordinator, zone)
+        self._attr_name = f"{zone.name} Learning Correction"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{coordinator.entry.entry_id}_zone_{zone.zone_id}_learning_correction"
+        )
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the correction factor as percentage."""
+        return round(self.zone.learning_correction * 100, 1)
+
+    @property
+    def icon(self) -> str:
+        return "mdi:brain"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "zone_id": self.zone.zone_id,
+            "correction_factor": round(self.zone.learning_correction, 4),
+            "confidence": self.zone.learning_confidence,
+            "learning_enabled": self.zone.learning_enabled,
+        }
+
+
+class ZoneLearningConfidenceSensor(IrrigationSensorBase):
+    """Sensor showing learning confidence (number of data points) for a zone."""
+
+    def __init__(self, coordinator: SmartIrrigationCoordinator, zone: ZoneData):
+        """Initialize the sensor."""
+        super().__init__(coordinator, zone)
+        self._attr_name = f"{zone.name} Learning Confidence"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{coordinator.entry.entry_id}_zone_{zone.zone_id}_learning_confidence"
+        )
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of data points used for learning."""
+        return self.zone.learning_confidence
+
+    @property
+    def icon(self) -> str:
+        return "mdi:chart-line"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "zone_id": self.zone.zone_id,
+            "min_entries_required": 5,
+            "learning_active": self.zone.learning_confidence >= 5,
         }

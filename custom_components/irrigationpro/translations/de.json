@@ -36,7 +36,12 @@
           "zone_weekdays": "Bewässerungstage",
           "zone_months": "Bewässerungsmonate",
           "zone_enabled": "Zone aktiviert",
-          "zone_adaptive": "Adaptive Bewässerung"
+          "zone_adaptive": "Adaptive Bewässerung",
+          "zone_vegetation_type": "Vegetationstyp",
+          "zone_soil_moisture_entity": "Bodenfeuchte-Sensor (optional)",
+          "zone_target_moisture_min": "Ziel-Bodenfeuchte min (%)",
+          "zone_target_moisture_max": "Ziel-Bodenfeuchte max (%)",
+          "zone_learning_enabled": "Automatisches Lernen aktivieren"
         }
       },
       "scheduling": {

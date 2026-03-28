@@ -41,13 +41,18 @@ from .const import (
     CONF_ZONE_ENABLED,
     CONF_ZONE_EXPOSURE_FACTOR,
     CONF_ZONE_FLOW_RATE,
+    CONF_ZONE_LEARNING_ENABLED,
     CONF_ZONE_MAX_DURATION,
     CONF_ZONE_MONTHS,
     CONF_ZONE_NAME,
     CONF_ZONE_PLANT_DENSITY,
     CONF_ZONE_RAIN_FACTORING,
     CONF_ZONE_RAIN_THRESHOLD,
+    CONF_ZONE_SOIL_MOISTURE_ENTITY,
     CONF_ZONE_SWITCH_ENTITY,
+    CONF_ZONE_TARGET_MOISTURE_MAX,
+    CONF_ZONE_TARGET_MOISTURE_MIN,
+    CONF_ZONE_VEGETATION_TYPE,
     CONF_ZONE_WEEKDAYS,
     CONF_ZONES,
     DEFAULT_CYCLES,
@@ -74,11 +79,14 @@ from .const import (
     DEFAULT_ZONE_ENABLED,
     DEFAULT_ZONE_EXPOSURE_FACTOR,
     DEFAULT_ZONE_FLOW_RATE,
+    DEFAULT_ZONE_LEARNING_ENABLED,
     DEFAULT_ZONE_MAX_DURATION,
     DEFAULT_ZONE_PLANT_DENSITY,
     DEFAULT_ZONE_RAIN_FACTORING,
     DEFAULT_ZONE_RAIN_THRESHOLD,
+    DEFAULT_ZONE_VEGETATION_TYPE,
     DOMAIN,
+    VEGETATION_TYPES,
     WEEKDAYS,
 )
 
@@ -327,8 +335,18 @@ def _normalize_zone(zone: dict[str, Any], index: int, existing_zone: dict[str, A
         CONF_ZONE_WEEKDAYS: WEEKDAYS,
         CONF_ZONE_MONTHS: list(range(1, 13)),
         CONF_ZONE_SWITCH_ENTITY: "",
+        CONF_ZONE_VEGETATION_TYPE: DEFAULT_ZONE_VEGETATION_TYPE,
+        CONF_ZONE_SOIL_MOISTURE_ENTITY: None,
+        CONF_ZONE_TARGET_MOISTURE_MIN: None,
+        CONF_ZONE_TARGET_MOISTURE_MAX: None,
+        CONF_ZONE_LEARNING_ENABLED: DEFAULT_ZONE_LEARNING_ENABLED,
     }
     src = {**defaults, **existing_zone, **(zone or {})}
+
+    # Resolve vegetation-based moisture defaults
+    veg_type = str(src.get(CONF_ZONE_VEGETATION_TYPE, DEFAULT_ZONE_VEGETATION_TYPE) or DEFAULT_ZONE_VEGETATION_TYPE)
+    veg_info = VEGETATION_TYPES.get(veg_type, VEGETATION_TYPES["lawn"])
+
     return {
         CONF_ZONE_NAME: str(src.get(CONF_ZONE_NAME, defaults[CONF_ZONE_NAME])).strip() or defaults[CONF_ZONE_NAME],
         CONF_ZONE_ENABLED: _to_bool(src.get(CONF_ZONE_ENABLED), DEFAULT_ZONE_ENABLED),
@@ -347,6 +365,11 @@ def _normalize_zone(zone: dict[str, Any], index: int, existing_zone: dict[str, A
         CONF_ZONE_WEEKDAYS: _normalize_weekdays(src.get(CONF_ZONE_WEEKDAYS)),
         CONF_ZONE_MONTHS: _normalize_months(src.get(CONF_ZONE_MONTHS)),
         CONF_ZONE_SWITCH_ENTITY: str(src.get(CONF_ZONE_SWITCH_ENTITY) or "").strip() or None,
+        CONF_ZONE_VEGETATION_TYPE: veg_type if veg_type in VEGETATION_TYPES else DEFAULT_ZONE_VEGETATION_TYPE,
+        CONF_ZONE_SOIL_MOISTURE_ENTITY: str(src.get(CONF_ZONE_SOIL_MOISTURE_ENTITY) or "").strip() or None,
+        CONF_ZONE_TARGET_MOISTURE_MIN: _to_float(src.get(CONF_ZONE_TARGET_MOISTURE_MIN), veg_info["target_min"]) if src.get(CONF_ZONE_TARGET_MOISTURE_MIN) else None,
+        CONF_ZONE_TARGET_MOISTURE_MAX: _to_float(src.get(CONF_ZONE_TARGET_MOISTURE_MAX), veg_info["target_max"]) if src.get(CONF_ZONE_TARGET_MOISTURE_MAX) else None,
+        CONF_ZONE_LEARNING_ENABLED: _to_bool(src.get(CONF_ZONE_LEARNING_ENABLED), DEFAULT_ZONE_LEARNING_ENABLED),
     }
 
 
@@ -496,6 +519,14 @@ class IrrigationProApiView(HomeAssistantView):
                         ),
                         "weekdays": zone.weekdays,
                         "months": zone.months,
+                        # Soil moisture learning
+                        "vegetation_type": zone.vegetation_type,
+                        "soil_moisture_entity": zone.soil_moisture_entity,
+                        "target_moisture_min": zone.target_moisture_min,
+                        "target_moisture_max": zone.target_moisture_max,
+                        "learning_enabled": zone.learning_enabled,
+                        "learning_correction": round(zone.learning_correction, 4),
+                        "learning_confidence": zone.learning_confidence,
                     }
                 )
 
@@ -1271,6 +1302,11 @@ class IrrigationProZoneScheduleView(HomeAssistantView):
                     "zone_enabled": zone.get(CONF_ZONE_ENABLED, DEFAULT_ZONE_ENABLED),
                     "zone_adjustment_percent": zone.get(CONF_ZONE_ADJUSTMENT_PERCENT, DEFAULT_ZONE_ADJUSTMENT_PERCENT),
                     "zone_switch_entity": zone.get(CONF_ZONE_SWITCH_ENTITY),
+                    "zone_vegetation_type": zone.get(CONF_ZONE_VEGETATION_TYPE, DEFAULT_ZONE_VEGETATION_TYPE),
+                    "zone_soil_moisture_entity": zone.get(CONF_ZONE_SOIL_MOISTURE_ENTITY),
+                    "zone_target_moisture_min": zone.get(CONF_ZONE_TARGET_MOISTURE_MIN),
+                    "zone_target_moisture_max": zone.get(CONF_ZONE_TARGET_MOISTURE_MAX),
+                    "zone_learning_enabled": zone.get(CONF_ZONE_LEARNING_ENABLED, DEFAULT_ZONE_LEARNING_ENABLED),
                 }
             )
 
@@ -1369,12 +1405,155 @@ class IrrigationProZoneScheduleView(HomeAssistantView):
                 zone[CONF_ZONE_SWITCH_ENTITY] = str(upd.get(CONF_ZONE_SWITCH_ENTITY) or "").strip() or None
             if CONF_ZONE_NAME in upd:
                 zone[CONF_ZONE_NAME] = str(upd.get(CONF_ZONE_NAME) or zone.get(CONF_ZONE_NAME) or f"Zone {zone_id}").strip() or f"Zone {zone_id}"
+            if CONF_ZONE_VEGETATION_TYPE in upd:
+                vtype = str(upd.get(CONF_ZONE_VEGETATION_TYPE, DEFAULT_ZONE_VEGETATION_TYPE))
+                zone[CONF_ZONE_VEGETATION_TYPE] = vtype if vtype in VEGETATION_TYPES else DEFAULT_ZONE_VEGETATION_TYPE
+            if CONF_ZONE_SOIL_MOISTURE_ENTITY in upd:
+                zone[CONF_ZONE_SOIL_MOISTURE_ENTITY] = str(upd.get(CONF_ZONE_SOIL_MOISTURE_ENTITY) or "").strip() or None
+            if CONF_ZONE_TARGET_MOISTURE_MIN in upd:
+                zone[CONF_ZONE_TARGET_MOISTURE_MIN] = max(5, min(60, _to_float(upd.get(CONF_ZONE_TARGET_MOISTURE_MIN), 20)))
+            if CONF_ZONE_TARGET_MOISTURE_MAX in upd:
+                zone[CONF_ZONE_TARGET_MOISTURE_MAX] = max(10, min(70, _to_float(upd.get(CONF_ZONE_TARGET_MOISTURE_MAX), 35)))
+            if CONF_ZONE_LEARNING_ENABLED in upd:
+                zone[CONF_ZONE_LEARNING_ENABLED] = _to_bool(upd.get(CONF_ZONE_LEARNING_ENABLED), DEFAULT_ZONE_LEARNING_ENABLED)
 
             updated_zone_ids.append(zone_id)
 
         merged = {**coordinator.entry.data, CONF_ZONES: zones_cfg}
         hass.config_entries.async_update_entry(coordinator.entry, data=merged)
         return self.json({"status": "ok", "updated_zones": sorted(set(updated_zone_ids))})
+
+
+class IrrigationProLearningStatusView(HomeAssistantView):
+    """API view for soil moisture learning status per zone."""
+
+    url = "/api/irrigationpro/learning/status"
+    name = "api:irrigationpro:learning_status"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return learning status for all zones."""
+        hass: HomeAssistant = request.app["hass"]
+        coordinator = _resolve_coordinator(hass, request.query.get("entry_id"))
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        zones = []
+        for zone in coordinator.zones:
+            zone_learning = coordinator.feedback_collector.get_zone_data(zone.zone_id)
+            zones.append({
+                "zone_id": zone.zone_id,
+                "name": zone.name,
+                "learning_enabled": zone.learning_enabled,
+                "soil_moisture_entity": zone.soil_moisture_entity,
+                "vegetation_type": zone.vegetation_type,
+                "target_moisture_min": zone.target_moisture_min,
+                "target_moisture_max": zone.target_moisture_max,
+                "correction_factor": round(zone_learning.correction_factor, 4),
+                "correction_percent": round(zone_learning.correction_factor * 100, 1),
+                "confidence": zone_learning.confidence,
+                "journal_entries": len(zone_learning.journal),
+                "last_updated": zone_learning.last_updated,
+                "current_moisture": (
+                    coordinator.feedback_collector.read_soil_moisture(zone.soil_moisture_entity)
+                    if zone.soil_moisture_entity else None
+                ),
+            })
+
+        return self.json({"status": "ok", "zones": zones})
+
+
+class IrrigationProLearningJournalView(HomeAssistantView):
+    """API view for soil moisture learning journal per zone."""
+
+    url = "/api/irrigationpro/learning/journal"
+    name = "api:irrigationpro:learning_journal"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return learning journal for a specific zone."""
+        hass: HomeAssistant = request.app["hass"]
+        coordinator = _resolve_coordinator(hass, request.query.get("entry_id"))
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        zone_id_raw = request.query.get("zone_id")
+        if not zone_id_raw:
+            return self.json({"error": "zone_id query parameter required"}, status_code=400)
+        try:
+            zone_id = int(zone_id_raw)
+        except (ValueError, TypeError):
+            return self.json({"error": "invalid zone_id"}, status_code=400)
+
+        journal = coordinator.feedback_collector.get_journal(zone_id)
+        zone_data = coordinator.feedback_collector.get_zone_data(zone_id)
+
+        return self.json({
+            "status": "ok",
+            "zone_id": zone_id,
+            "correction_factor": round(zone_data.correction_factor, 4),
+            "confidence": zone_data.confidence,
+            "journal": list(reversed(journal)),  # newest first
+        })
+
+
+class IrrigationProLearningResetView(HomeAssistantView):
+    """API view to reset learning data for a zone or all zones."""
+
+    url = "/api/irrigationpro/learning/reset"
+    name = "api:irrigationpro:learning_reset"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Reset learning data."""
+        hass: HomeAssistant = request.app["hass"]
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+
+        coordinator = _resolve_coordinator(hass, data.get("entry_id"))
+        if coordinator is None:
+            return self.json({"error": "No IrrigationPro instance configured"}, status_code=404)
+
+        zone_id = data.get("zone_id")
+        if zone_id is not None:
+            try:
+                zone_id = int(zone_id)
+            except (ValueError, TypeError):
+                return self.json({"error": "invalid zone_id"}, status_code=400)
+
+        await coordinator.async_reset_learning(zone_id)
+
+        return self.json({
+            "status": "ok",
+            "reset_zone": zone_id if zone_id is not None else "all",
+        })
+
+
+class IrrigationProVegetationTypesView(HomeAssistantView):
+    """API view returning available vegetation types with scientific defaults."""
+
+    url = "/api/irrigationpro/vegetation_types"
+    name = "api:irrigationpro:vegetation_types"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return all vegetation types with their scientific moisture targets."""
+        result = []
+        for key, veg in VEGETATION_TYPES.items():
+            result.append({
+                "key": key,
+                "name_de": veg["name_de"],
+                "name_en": veg["name_en"],
+                "kc": veg["kc"],
+                "mad_range": list(veg["mad_range"]),
+                "target_min": veg["target_min"],
+                "target_max": veg["target_max"],
+                "description_de": veg["description_de"],
+                "description_en": veg["description_en"],
+            })
+        return self.json({"vegetation_types": result})
 
 
 def async_register_api(hass: HomeAssistant) -> None:
@@ -1396,3 +1575,7 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(IrrigationProBackupApplyView)
     hass.http.register_view(IrrigationProZoneScheduleView)
     hass.http.register_view(IrrigationProHistoryView)
+    hass.http.register_view(IrrigationProLearningStatusView)
+    hass.http.register_view(IrrigationProLearningJournalView)
+    hass.http.register_view(IrrigationProLearningResetView)
+    hass.http.register_view(IrrigationProVegetationTypesView)

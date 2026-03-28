@@ -42,3 +42,18 @@ stop_zone:
 recalculate:
   name: Recalculate Schedule
   description: Force recalculation of the irrigation schedule based on current weather data
+
+reset_learning:
+  name: Reset Learning Data
+  description: Reset the soil moisture learning data for a specific zone or all zones
+  fields:
+    zone_id:
+      name: Zone ID
+      description: The ID of the zone to reset (1-16). Leave empty to reset all zones.
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 16
+          mode: box
