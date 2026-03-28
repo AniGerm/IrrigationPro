@@ -5,7 +5,7 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
-## [2.2.0] - 2026-03-28
+## [2.2.1] - 2026-03-28
 
 ### Hinzugefügt
 - Lernmodul für automatische Bodenfeuchte-Nachregelung pro Zone (`learning.py`)
@@ -16,7 +16,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/d
 ### Geändert
 - Config Flow um Vegetationstyp, Bodenfeuchte-Sensor, Ziel-Feuchtebereich und Lernschalter erweitert
 - Bewässerungsdauer-Berechnung um lernbasierten Korrekturfaktor ergänzt
-- Manifest-Version auf 2.2.0 angehoben
+- Manifest-Version auf 2.2.1 angehoben
 
 ### Technische Details
 - Wissenschaftlich basierte Zielwerte pro Vegetationstyp (FAO-56/MAD-orientiert)

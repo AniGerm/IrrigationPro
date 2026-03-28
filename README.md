@@ -12,7 +12,7 @@ IrrigationPro is a scientifically based irrigation controller for Home Assistant
 FAO-56 Penman-Monteith evapotranspiration, provides a dedicated dashboard in the Home Assistant frontend, supports backup and restore of 
 the configuration, and can optionally offer a native HomeKit sprinkler bridge.
 
-The current stable release is version 2.2.0. This repository is structured as a HACS custom repository and already includes the required
+The current stable release is version 2.2.1. This repository is structured as a HACS custom repository and already includes the required
 validation workflows for HACS and hassfest.
 
 ## Features
@@ -175,7 +175,7 @@ IrrigationPro ist ein irrigationssteuerndes Addon für Home Assistant, das die W
 einen eigenen Dashboard in der Frontend-Benutzeroberfläche von Home Assistant bietet. Die Komponente unterstützt zudem den Backup und Restore des 
 Konfigurationsspeichers und kann optionale Unterstützung für einen HomeKit-Bewässerungsbereich anbieten.
 
-Die aktuelle stabile Version ist 2.2.0. Das Repository ist als Custom Repository für HACS strukturiert und enthält bereits die benötigten
+Die aktuelle stabile Version ist 2.2.1. Das Repository ist als Custom Repository für HACS strukturiert und enthält bereits die benötigten
 Validierungsworkflows für HACS und Hassfest.
 
 ## Funktionen
