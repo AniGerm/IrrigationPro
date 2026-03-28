@@ -441,15 +441,30 @@ def _validate_candidate(hass: HomeAssistant, candidate: dict[str, Any]) -> dict[
     return {"errors": errors, "warnings": warnings}
 
 
+def _get_current_moisture(hass: HomeAssistant, entity_id: str | None) -> float | None:
+    """Read the current moisture value from a sensor entity."""
+    if not entity_id:
+        return None
+    state_obj = hass.states.get(entity_id)
+    if state_obj is None or state_obj.state in ("unknown", "unavailable"):
+        return None
+    try:
+        return round(float(state_obj.state), 1)
+    except (ValueError, TypeError):
+        return None
+
+
 def _available_entities(hass: HomeAssistant) -> dict[str, list[str]]:
-    """Return weather and switch-like entities for backup editor suggestions."""
+    """Return weather, switch-like, and sensor entities for backup editor suggestions."""
     weather_entities = sorted(list(hass.states.async_entity_ids("weather")))
     switch_like = set(hass.states.async_entity_ids("switch"))
     switch_like.update(hass.states.async_entity_ids("light"))
     switch_like.update(hass.states.async_entity_ids("valve"))
+    sensor_entities = sorted(list(hass.states.async_entity_ids("sensor")))
     return {
         "weather_entities": weather_entities,
         "switch_entities": sorted(list(switch_like)),
+        "sensor_entities": sensor_entities,
     }
 
 
@@ -527,6 +542,7 @@ class IrrigationProApiView(HomeAssistantView):
                         "learning_enabled": zone.learning_enabled,
                         "learning_correction": round(zone.learning_correction, 4),
                         "learning_confidence": zone.learning_confidence,
+                        "current_moisture": _get_current_moisture(hass, zone.soil_moisture_entity),
                     }
                 )
 
@@ -595,6 +611,7 @@ class IrrigationProApiView(HomeAssistantView):
                         | set(hass.states.async_entity_ids("valve"))
                     )
                 ),
+                "sensor_entities": sorted(list(hass.states.async_entity_ids("sensor"))),
                 "current_month": month_now,
                 "current_month_solar_radiation": round(float(solar_month_val), 2) if solar_month_val is not None else None,
                 "solar_radiation": solar_all,
