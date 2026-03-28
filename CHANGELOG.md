@@ -5,6 +5,20 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.2] - 2026-03-28
+
+### Hinzugefügt
+- Pushover-Alerts bei Sensor-Verbindungsverlust (nach 30 Min. Offline → zweisprachige Benachrichtigung)
+- Pushover-Alert wenn Sensor-Batterie unter 15% fällt (mit Aufforderung zum Tausch)
+- Pushover-Recovery-Meldung wenn Sensor wieder erreichbar ist
+- Frontend: Feuchtigkeits-Badge (💧) und Lern-Badge (🧠) in Zone-Kacheln
+- Frontend: Lern-Detail-Modal mit Journal, Statistiken und Reset
+- Frontend: Vegetationstyp-Auswahl, Sensor-Entity-Feld, Ziel-Feuchte in Zonen-Einstellungen
+- API: `sensor_entities` Liste und `current_moisture` pro Zone in Status-Antwort
+
+### Geändert
+- Manifest-Version auf 2.2.2 angehoben
+
 ## [2.2.1] - 2026-03-28
 
 ### Hinzugefügt

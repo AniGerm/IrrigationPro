@@ -65,6 +65,8 @@ from .const import (
     DEFAULT_SOLAR_RADIATION,
     DEFAULT_DAILY_REPORT_ENABLED,
     DEFAULT_DAILY_REPORT_HOUR,
+    DEFAULT_SENSOR_ALERT_MINUTES,
+    SENSOR_BATTERY_LOW_THRESHOLD,
     DOMAIN,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -182,6 +184,13 @@ _TEXT = {
         "test_message": "Test-Benachrichtigung erfolgreich! Priorität: {priority}",
         "learning_feedback_scheduled": "Bodenfeuchtesensor-Auswertung für Zone «{zone}» in {hours}h geplant",
         "learning_correction_updated": "Zone «{zone}» Lernkorrektur aktualisiert: {factor:.1%} (Konfidenz: {confidence})",
+        # Sensor health alerts
+        "title_sensor_offline": "⚠️ Sensor nicht erreichbar",
+        "title_sensor_recovered": "✅ Sensor wieder erreichbar",
+        "title_sensor_battery_low": "🪫 Sensor-Batterie schwach",
+        "sensor_offline_message": "Der Feuchtigkeitssensor «{entity}» (Zone «{zone}») ist seit {minutes} Minuten nicht erreichbar.\nBitte prüfe die Verbindung.",
+        "sensor_recovered_message": "Der Feuchtigkeitssensor «{entity}» (Zone «{zone}») ist wieder erreichbar.\nAktueller Wert: {value}%",
+        "sensor_battery_low_message": "Die Batterie des Sensors «{entity}» (Zone «{zone}») ist bei {level}%.\nBitte Batterie bald tauschen.",
     },
     "en": {
         "zone_disabled": "Zone disabled",
@@ -228,6 +237,13 @@ _TEXT = {
         "test_message": "Test notification sent successfully! Priority: {priority}",
         "learning_feedback_scheduled": "Soil moisture feedback for zone «{zone}» scheduled in {hours}h",
         "learning_correction_updated": "Zone «{zone}» learning correction updated: {factor:.1%} (confidence: {confidence})",
+        # Sensor health alerts
+        "title_sensor_offline": "⚠️ Sensor offline",
+        "title_sensor_recovered": "✅ Sensor recovered",
+        "title_sensor_battery_low": "🪫 Sensor battery low",
+        "sensor_offline_message": "The moisture sensor «{entity}» (zone «{zone}») has been unreachable for {minutes} minutes.\nPlease check the connection.",
+        "sensor_recovered_message": "The moisture sensor «{entity}» (zone «{zone}») is reachable again.\nCurrent value: {value}%",
+        "sensor_battery_low_message": "The battery of sensor «{entity}» (zone «{zone}») is at {level}%.\nPlease replace the battery soon.",
     },
 }
 
@@ -313,6 +329,10 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         self._daily_report_unsub = None
         self._watering_started_at: datetime | None = None
         self.homekit_server = None  # Set by __init__.py if HomeKit enabled
+        
+        # Sensor health monitoring
+        self._sensor_unavailable_since: dict[str, datetime] = {}
+        self._sensor_alerted: dict[str, str] = {}  # entity_id -> last alert type
         
         # Soil moisture learning
         self.feedback_collector = FeedbackCollector(hass, entry.entry_id)
@@ -490,6 +510,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             await self._async_calculate_schedule()
             self.last_refresh_time = dt_util.now()
             
+            # Check soil moisture sensor health after schedule calculation
+            await self._async_check_sensor_health()
+            
             return {
                 "forecast": self.forecast,
                 "zones": self.zones,
@@ -499,6 +522,87 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         except Exception as err:
             _LOGGER.error("Error updating data: %s", err)
             raise UpdateFailed(f"Error updating data: {err}")
+
+    async def _async_check_sensor_health(self) -> None:
+        """Check soil moisture sensors for availability and battery issues."""
+        now = dt_util.now()
+        alert_minutes = DEFAULT_SENSOR_ALERT_MINUTES
+
+        for zone in self.zones:
+            entity_id = zone.soil_moisture_entity
+            if not entity_id:
+                continue
+
+            state_obj = self.hass.states.get(entity_id)
+            is_unavailable = (
+                state_obj is None
+                or state_obj.state in ("unavailable", "unknown")
+            )
+
+            if is_unavailable:
+                # Track when it first went unavailable
+                if entity_id not in self._sensor_unavailable_since:
+                    self._sensor_unavailable_since[entity_id] = now
+
+                elapsed = (now - self._sensor_unavailable_since[entity_id]).total_seconds() / 60
+                if elapsed >= alert_minutes and self._sensor_alerted.get(entity_id) != "offline":
+                    self._sensor_alerted[entity_id] = "offline"
+                    await self._send_pushover_notification(
+                        self._txt("title_sensor_offline"),
+                        self._txt(
+                            "sensor_offline_message",
+                            entity=entity_id,
+                            zone=zone.name,
+                            minutes=int(elapsed),
+                        ),
+                    )
+            else:
+                # Sensor is back online
+                if entity_id in self._sensor_unavailable_since:
+                    del self._sensor_unavailable_since[entity_id]
+                    if self._sensor_alerted.get(entity_id) == "offline":
+                        self._sensor_alerted.pop(entity_id, None)
+                        try:
+                            current_val = round(float(state_obj.state), 1)
+                        except (ValueError, TypeError):
+                            current_val = "?"
+                        await self._send_pushover_notification(
+                            self._txt("title_sensor_recovered"),
+                            self._txt(
+                                "sensor_recovered_message",
+                                entity=entity_id,
+                                zone=zone.name,
+                                value=current_val,
+                            ),
+                        )
+
+                # Check battery level from entity attributes
+                battery = None
+                if state_obj and state_obj.attributes:
+                    for attr in ("battery_level", "battery", "Battery"):
+                        val = state_obj.attributes.get(attr)
+                        if val is not None:
+                            try:
+                                battery = float(val)
+                            except (ValueError, TypeError):
+                                pass
+                            break
+
+                if battery is not None and battery <= SENSOR_BATTERY_LOW_THRESHOLD:
+                    if self._sensor_alerted.get(entity_id) != "battery":
+                        self._sensor_alerted[entity_id] = "battery"
+                        await self._send_pushover_notification(
+                            self._txt("title_sensor_battery_low"),
+                            self._txt(
+                                "sensor_battery_low_message",
+                                entity=entity_id,
+                                zone=zone.name,
+                                level=int(battery),
+                            ),
+                        )
+                elif battery is not None and battery > SENSOR_BATTERY_LOW_THRESHOLD:
+                    if self._sensor_alerted.get(entity_id) == "battery":
+                        self._sensor_alerted.pop(entity_id, None)
 
     async def _async_calculate_schedule(self):
         """Calculate watering schedule for all zones."""

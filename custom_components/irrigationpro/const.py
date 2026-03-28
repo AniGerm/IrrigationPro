@@ -3,7 +3,7 @@ from typing import Final
 
 # Integration domain
 DOMAIN: Final = "irrigationpro"
-VERSION: Final = "2.2.1"
+VERSION: Final = "2.2.2"
 
 # Configuration
 CONF_WEATHER_ENTITY: Final = "weather_entity"
@@ -50,6 +50,11 @@ CONF_PUSHOVER_DEVICE: Final = "pushover_device"
 CONF_PUSHOVER_PRIORITY: Final = "pushover_priority"
 CONF_DAILY_REPORT_ENABLED: Final = "daily_report_enabled"
 CONF_DAILY_REPORT_HOUR: Final = "daily_report_hour"
+
+# Sensor health monitoring
+CONF_SENSOR_ALERT_MINUTES: Final = "sensor_alert_minutes"
+DEFAULT_SENSOR_ALERT_MINUTES: Final = 30
+SENSOR_BATTERY_LOW_THRESHOLD: Final = 15  # percent
 
 # Solar radiation (monthly average kWh/day)
 CONF_SOLAR_RADIATION: Final = "solar_radiation"
