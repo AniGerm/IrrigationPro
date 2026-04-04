@@ -1333,6 +1333,7 @@
         'zone.moisture': 'Bodenfeuchte',
         'zone.learning': 'Auto-Anpassung',
         'zone.learning_off': 'Lernen aus',
+        'zone.moisture_reduced': 'Dauer reduziert (Boden feucht)',
         'zone.sensor_active': 'Sensor aktiv',
         'zone.sensor_off': 'Kein Sensor',
         'learn.title': '🧠 Lernverlauf: {name}',
@@ -1565,6 +1566,7 @@
         'zone.moisture': 'Soil Moisture',
         'zone.learning': 'Auto-Adjust',
         'zone.learning_off': 'Learning off',
+        'zone.moisture_reduced': 'Duration reduced (soil moist)',
         'zone.sensor_active': 'Sensor active',
         'zone.sensor_off': 'No sensor',
         'zone.learning': 'Auto-Adjust',
@@ -1593,7 +1595,7 @@
       }
     };
 
-    const UI_VERSION = '2.2.2';
+    const UI_VERSION = '2.2.3';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {
@@ -2514,7 +2516,8 @@
             </div>
             ${skipReasonHtml}
             <div class="zone-badges">
-              ${zone.soil_moisture_entity ? `<span class="moisture-badge" title="${t('zone.sensor_active')}: ${zone.soil_moisture_entity}">💧 ${zone.current_moisture !== undefined && zone.current_moisture !== null ? zone.current_moisture + '%' : '–'}</span>` : ''}
+              ${zone.soil_moisture_entity ? `<span class="moisture-badge${zone.current_moisture !== null && zone.current_moisture !== undefined && zone.current_moisture >= (zone.target_moisture_max || 35) ? ' style=\"background:rgba(244,67,54,0.15);color:var(--danger)\"' : ''}" title="${t('zone.sensor_active')}: ${zone.soil_moisture_entity}${zone.target_moisture_min && zone.target_moisture_max ? ' ('+zone.target_moisture_min+'–'+zone.target_moisture_max+'%)' : ''}">💧 ${zone.current_moisture !== undefined && zone.current_moisture !== null ? zone.current_moisture + '%' : '–'}</span>` : ''}
+              ${zone.moisture_reduction !== undefined && zone.moisture_reduction < 1 && zone.duration > 0 ? `<span class="moisture-badge" style="background:rgba(255,152,0,0.15);color:#e65100" title="${t('zone.moisture_reduced')}">⚡ -${Math.round((1 - zone.moisture_reduction) * 100)}%</span>` : ''}
               ${zone.learning_enabled && zone.soil_moisture_entity ? `<span class="learning-badge active" title="${t('zone.learning')}: ${Math.round(zone.learning_correction * 100)}%" onclick="event.stopPropagation(); openLearningModal(${zone.zone_id})">🧠 ${Math.round(zone.learning_correction * 100)}%</span>` : ''}
               ${zone.soil_moisture_entity && !zone.learning_enabled ? `<span class="learning-badge inactive" title="${t('zone.learning_off')}">🧠 ${t('zone.learning_off')}</span>` : ''}
             </div>

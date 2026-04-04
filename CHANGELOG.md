@@ -5,6 +5,24 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.3] - 2025-07-12
+
+### Behoben
+- **Kritischer Bugfix:** Bodenfeuchte-Sensoren wurden bei der Bewässerungsplanung nicht berücksichtigt – Zonen liefen trotz 87–100% Feuchte mit voller Dauer
+- Bewässerungsplanung prüft jetzt aktiv die aktuelle Bodenfeuchte pro Zone:
+  - Feuchte ≥ Ziel-Maximum → Zone wird komplett übersprungen
+  - Feuchte zwischen Min und Max → Dauer wird proportional reduziert
+- Sicherheits-Nachprüfung direkt vor Ventilöffnung: Falls Feuchte seit der Planung gestiegen ist, wird die Zone übersprungen
+
+### Hinzugefügt
+- Pushover-Benachrichtigung bei feuchtigkeitsbedingtem Überspringen oder Reduzieren einer Zone
+- Frontend: Feuchtigkeits-Badge wird rot bei Überschreitung des Zielwerts
+- Frontend: Reduktions-Badge (⚡ -X%) bei feuchtigkeitsbedingter Dauerkürzung
+- API: `moisture_reduction` pro Zone im Status-Endpoint
+
+### Geändert
+- Manifest-Version auf 2.2.3 angehoben
+
 ## [2.2.2] - 2026-03-28
 
 ### Hinzugefügt

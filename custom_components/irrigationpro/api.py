@@ -543,6 +543,7 @@ class IrrigationProApiView(HomeAssistantView):
                         "learning_correction": round(zone.learning_correction, 4),
                         "learning_confidence": zone.learning_confidence,
                         "current_moisture": _get_current_moisture(hass, zone.soil_moisture_entity),
+                        "moisture_reduction": round(getattr(zone, "moisture_reduction", 1.0), 2),
                     }
                 )
 

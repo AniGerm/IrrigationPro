@@ -191,6 +191,13 @@ _TEXT = {
         "sensor_offline_message": "Der Feuchtigkeitssensor «{entity}» (Zone «{zone}») ist seit {minutes} Minuten nicht erreichbar.\nBitte prüfe die Verbindung.",
         "sensor_recovered_message": "Der Feuchtigkeitssensor «{entity}» (Zone «{zone}») ist wieder erreichbar.\nAktueller Wert: {value}%",
         "sensor_battery_low_message": "Die Batterie des Sensors «{entity}» (Zone «{zone}») ist bei {level}%.\nBitte Batterie bald tauschen.",
+        # Soil moisture skip
+        "moisture_too_high": "Bodenfeuchte zu hoch ({moisture:.0f}% >= {target_max}%) – Bewässerung übersprungen",
+        "moisture_reduced": "Bodenfeuchte ausreichend ({moisture:.0f}%) – Dauer um {reduction:.0f}% reduziert",
+        "title_moisture_skip": "💧 Bewässerung übersprungen (Boden feucht)",
+        "moisture_skip_message": "Zone «{zone}»: Bodenfeuchte {moisture:.0f}% liegt über Zielwert {target_max}%.\nBewässerung wird verschoben, bis der Boden trockener ist.",
+        "title_moisture_reduced": "💧 Bewässerung reduziert",
+        "moisture_reduced_message": "Zone «{zone}»: Bodenfeuchte {moisture:.0f}% (Ziel: {target_min}–{target_max}%).\nDauer um {reduction:.0f}% reduziert.",
     },
     "en": {
         "zone_disabled": "Zone disabled",
@@ -244,6 +251,13 @@ _TEXT = {
         "sensor_offline_message": "The moisture sensor «{entity}» (zone «{zone}») has been unreachable for {minutes} minutes.\nPlease check the connection.",
         "sensor_recovered_message": "The moisture sensor «{entity}» (zone «{zone}») is reachable again.\nCurrent value: {value}%",
         "sensor_battery_low_message": "The battery of sensor «{entity}» (zone «{zone}») is at {level}%.\nPlease replace the battery soon.",
+        # Soil moisture skip
+        "moisture_too_high": "Soil moisture too high ({moisture:.0f}% >= {target_max}%) – watering skipped",
+        "moisture_reduced": "Soil moisture adequate ({moisture:.0f}%) – duration reduced by {reduction:.0f}%",
+        "title_moisture_skip": "💧 Watering skipped (soil wet)",
+        "moisture_skip_message": "Zone «{zone}»: Soil moisture {moisture:.0f}% is above target {target_max}%.\nWatering postponed until soil is drier.",
+        "title_moisture_reduced": "💧 Watering reduced",
+        "moisture_reduced_message": "Zone «{zone}»: Soil moisture {moisture:.0f}% (target: {target_min}–{target_max}%).\nDuration reduced by {reduction:.0f}%.",
     },
 }
 
@@ -297,6 +311,8 @@ class ZoneData:
         self.skip_reason: str = ""  # Why this zone is not scheduled
         self.duration_uncapped: float = 0.0  # Calculated duration before max_duration cap
         self.days_until_next: int = 1  # Days of ETo accumulated for this calculation
+        self.current_moisture: float | None = None  # Live reading from sensor
+        self.moisture_reduction: float = 1.0  # 1.0 = none, <1.0 = reduced due to moisture
 
 
 class SmartIrrigationCoordinator(DataUpdateCoordinator):
@@ -671,6 +687,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         # Recalculate durations for the selected day
         total_duration = 0
+        moisture_skipped_zones = []
+        moisture_reduced_zones = []
         for zone in self.zones:
             if zone.enabled:
                 zone.duration = await self._calculate_zone_duration(zone, day_index)
@@ -682,6 +700,35 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     cycles,
                     zone.duration,
                 )
+                # Track moisture-based decisions for notifications
+                if zone.current_moisture is not None and zone.duration == 0 and zone.current_moisture >= zone.target_moisture_max:
+                    moisture_skipped_zones.append(zone)
+                elif zone.moisture_reduction < 1.0 and zone.duration > 0:
+                    moisture_reduced_zones.append(zone)
+
+        # Send pushover notifications for moisture-based skips
+        for zone in moisture_skipped_zones:
+            await self._send_pushover_notification(
+                self._txt("title_moisture_skip"),
+                self._txt(
+                    "moisture_skip_message",
+                    zone=zone.name,
+                    moisture=zone.current_moisture,
+                    target_max=zone.target_moisture_max,
+                ),
+            )
+        for zone in moisture_reduced_zones:
+            await self._send_pushover_notification(
+                self._txt("title_moisture_reduced"),
+                self._txt(
+                    "moisture_reduced_message",
+                    zone=zone.name,
+                    moisture=zone.current_moisture,
+                    target_min=zone.target_moisture_min,
+                    target_max=zone.target_moisture_max,
+                    reduction=(1.0 - zone.moisture_reduction) * 100,
+                ),
+            )
         
         # Calculate start and end times
         sunrise = self.forecast[day_index].sunrise
@@ -788,6 +835,42 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 )
                 return 0
         
+        # ── Soil moisture check: skip or reduce if soil is already wet ──
+        moisture_reduction = 1.0  # 1.0 = no reduction, 0.0 = full skip
+        if zone.soil_moisture_entity:
+            current = self.feedback_collector.read_soil_moisture(zone.soil_moisture_entity)
+            zone.current_moisture = current
+            if current is not None:
+                _LOGGER.debug(
+                    "Zone '%s': soil moisture = %.1f%% (target: %d–%d%%)",
+                    zone.name, current, zone.target_moisture_min, zone.target_moisture_max,
+                )
+                if current >= zone.target_moisture_max:
+                    # Soil is wet enough (or too wet) → skip watering entirely
+                    zone.skip_reason = self._txt(
+                        "moisture_too_high",
+                        moisture=current,
+                        target_max=zone.target_moisture_max,
+                    )
+                    _LOGGER.info(
+                        "Zone '%s': SKIPPED – soil moisture %.0f%% >= target_max %d%%",
+                        zone.name, current, zone.target_moisture_max,
+                    )
+                    zone.water_needed = 0
+                    zone.duration_uncapped = 0
+                    return 0
+                elif current > zone.target_moisture_min:
+                    # Soil is in the target range → proportionally reduce
+                    moisture_range = zone.target_moisture_max - zone.target_moisture_min
+                    if moisture_range > 0:
+                        excess = current - zone.target_moisture_min
+                        moisture_reduction = max(0.0, 1.0 - (excess / moisture_range))
+                    _LOGGER.info(
+                        "Zone '%s': soil moisture %.0f%% in target range → "
+                        "duration reduced to %.0f%%",
+                        zone.name, current, moisture_reduction * 100,
+                    )
+
         # Apply crop and zone factors
         water_needed = (
             water_needed
@@ -809,6 +892,11 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         
         # Adjust for efficiency
         water_needed = water_needed * 100 / zone.efficiency
+
+        # Apply soil moisture reduction (if sensor shows soil partially wet)
+        if moisture_reduction < 1.0:
+            water_needed = water_needed * moisture_reduction
+        zone.moisture_reduction = moisture_reduction
         
         zone.water_needed = water_needed
 
@@ -835,12 +923,18 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
 
         if duration == 0:
             zone.skip_reason = self._txt("no_water_needed")
+        elif moisture_reduction < 1.0:
+            zone.skip_reason = self._txt(
+                "moisture_reduced",
+                moisture=zone.current_moisture,
+                reduction=(1.0 - moisture_reduction) * 100,
+            )
         else:
             zone.skip_reason = ""
 
         _LOGGER.info(
             "Zone '%s': ETo=%.2f mm (%d Tage), Regen=%.2f mm, Bedarf=%.1f L, "
-            "Dauer=%.1f%s min/Zyklus x%d [flow=%.1f L/h, effiz=%d%%]",
+            "Dauer=%.1f%s min/Zyklus x%d [flow=%.1f L/h, effiz=%d%%, feuchte=%s%%, reduktion=%.0f%%]",
             zone.name,
             eto_total,
             days_until_next,
@@ -851,6 +945,8 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
             cycles,
             total_flow_rate,
             zone.efficiency,
+            f"{zone.current_moisture:.0f}" if zone.current_moisture is not None else "–",
+            (1.0 - moisture_reduction) * 100,
         )
 
         return duration
@@ -951,6 +1047,31 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
     async def _water_zone(self, zone: ZoneData):
         """Water a single zone."""
         _LOGGER.info("Starting zone '%s' for %.1f minutes", zone.name, zone.duration)
+
+        # Safety net: re-check soil moisture before actually opening the valve
+        if zone.soil_moisture_entity:
+            current = self.feedback_collector.read_soil_moisture(zone.soil_moisture_entity)
+            if current is not None and current >= zone.target_moisture_max:
+                _LOGGER.info(
+                    "Zone '%s': SKIPPED at valve time – moisture %.0f%% >= %d%%",
+                    zone.name, current, zone.target_moisture_max,
+                )
+                zone.skip_reason = self._txt(
+                    "moisture_too_high",
+                    moisture=current,
+                    target_max=zone.target_moisture_max,
+                )
+                zone.current_moisture = current
+                await self._send_pushover_notification(
+                    self._txt("title_moisture_skip"),
+                    self._txt(
+                        "moisture_skip_message",
+                        zone=zone.name,
+                        moisture=current,
+                        target_max=zone.target_moisture_max,
+                    ),
+                )
+                return
         
         zone.is_running = True
         zone.started_at = dt_util.now()
