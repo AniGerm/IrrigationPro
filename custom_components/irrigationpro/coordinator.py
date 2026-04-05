@@ -349,6 +349,9 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         # Sensor health monitoring
         self._sensor_unavailable_since: dict[str, datetime] = {}
         self._sensor_alerted: dict[str, str] = {}  # entity_id -> last alert type
+
+        # Moisture notification deduplication (only once per calendar day)
+        self._moisture_notified_date: str | None = None
         
         # Soil moisture learning
         self.feedback_collector = FeedbackCollector(hass, entry.entry_id)
@@ -706,30 +709,48 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 elif zone.moisture_reduction < 1.0 and zone.duration > 0:
                     moisture_reduced_zones.append(zone)
 
-        # Send pushover notifications for moisture-based skips
-        for zone in moisture_skipped_zones:
-            await self._send_pushover_notification(
-                self._txt("title_moisture_skip"),
-                self._txt(
-                    "moisture_skip_message",
-                    zone=zone.name,
-                    moisture=zone.current_moisture,
-                    target_max=zone.target_moisture_max,
-                ),
-            )
-        for zone in moisture_reduced_zones:
-            await self._send_pushover_notification(
-                self._txt("title_moisture_reduced"),
-                self._txt(
-                    "moisture_reduced_message",
-                    zone=zone.name,
-                    moisture=zone.current_moisture,
-                    target_min=zone.target_moisture_min,
-                    target_max=zone.target_moisture_max,
-                    reduction=(1.0 - zone.moisture_reduction) * 100,
-                ),
-            )
+        # Send moisture notifications only once per calendar day
+        today_str = dt_util.now().strftime("%Y-%m-%d")
+        if (moisture_skipped_zones or moisture_reduced_zones) and self._moisture_notified_date != today_str:
+            self._moisture_notified_date = today_str
+            for zone in moisture_skipped_zones:
+                await self._send_pushover_notification(
+                    self._txt("title_moisture_skip"),
+                    self._txt(
+                        "moisture_skip_message",
+                        zone=zone.name,
+                        moisture=zone.current_moisture,
+                        target_max=zone.target_moisture_max,
+                    ),
+                )
+            for zone in moisture_reduced_zones:
+                await self._send_pushover_notification(
+                    self._txt("title_moisture_reduced"),
+                    self._txt(
+                        "moisture_reduced_message",
+                        zone=zone.name,
+                        moisture=zone.current_moisture,
+                        target_min=zone.target_moisture_min,
+                        target_max=zone.target_moisture_max,
+                        reduction=(1.0 - zone.moisture_reduction) * 100,
+                    ),
+                )
         
+        # If all zones ended up with 0 duration → nothing to water
+        if total_duration == 0:
+            self.scheduled_run = None
+            self.recheck_scheduled = None
+            if moisture_skipped_zones:
+                self.schedule_reason = self._txt(
+                    "moisture_too_high",
+                    moisture=moisture_skipped_zones[0].current_moisture,
+                    target_max=moisture_skipped_zones[0].target_moisture_max,
+                )
+            else:
+                self.schedule_reason = self._txt("no_water_needed")
+            self._setup_daily_report()
+            return
+
         # Calculate start and end times
         sunrise = self.forecast[day_index].sunrise
         start_time = sunrise - timedelta(minutes=total_duration + sunrise_offset)
@@ -1377,12 +1398,16 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         cycles = int(self.entry.data.get(CONF_CYCLES, 2))
         lines = []
         for z in self.zones:
-            if z.enabled and z.duration > 0:
+            if not z.enabled:
+                continue
+            if z.duration > 0:
                 total = self._fmt_duration(z.duration * cycles)
                 per_c = self._fmt_duration(z.duration)
                 lines.append(
                     f"{prefix} {z.name}: {total} min.  ({cycles}\u00d7 {per_c} min.)"
                 )
+            elif z.skip_reason:
+                lines.append(f"\u23ed {z.name}: {z.skip_reason}")
         return "\n".join(lines) if lines else self._txt("no_zones_configured")
 
     def _format_weather_footer(self) -> str:

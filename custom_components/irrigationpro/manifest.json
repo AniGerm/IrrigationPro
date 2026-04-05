@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/AniGerm/IrrigationPro/issues",
   "loggers": ["pyhap"],
   "requirements": ["HAP-python>=4.6.0", "qrcode>=7.0"],
-  "version": "2.2.3"
+  "version": "2.2.4"
 }

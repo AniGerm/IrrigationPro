@@ -5,6 +5,17 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.4] - 2026-04-05
+
+### Behoben
+- **Pushover-Spam behoben:** Feuchtigkeits-Benachrichtigungen (Übersprungen/Reduziert) werden jetzt nur einmal pro Tag gesendet statt bei jedem stündlichen Update
+- **"Keine Zonen konfiguriert" behoben:** Wenn alle Zonen wegen Bodenfeuchte übersprungen werden, zeigt die Meldung jetzt korrekt die Zonen mit ihren Skip-Gründen an (⏭ Zone: Grund)
+- **Phantom-Bewässerung behoben:** Wenn alle Zonen 0 Dauer haben (z.B. Boden feucht), wird kein Bewässerungslauf mehr geplant (Start ≠ Ende, Dauer ≠ 00:00)
+- **Daily Report:** Wird jetzt auch korrekt registriert wenn keine Bewässerung nötig ist
+
+### Geändert
+- Manifest-Version auf 2.2.4 angehoben
+
 ## [2.2.3] - 2025-07-12
 
 ### Behoben
