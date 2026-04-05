@@ -349,9 +349,6 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
         # Sensor health monitoring
         self._sensor_unavailable_since: dict[str, datetime] = {}
         self._sensor_alerted: dict[str, str] = {}  # entity_id -> last alert type
-
-        # Moisture notification deduplication (only once per calendar day)
-        self._moisture_notified_date: str | None = None
         
         # Soil moisture learning
         self.feedback_collector = FeedbackCollector(hass, entry.entry_id)
@@ -709,33 +706,6 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                 elif zone.moisture_reduction < 1.0 and zone.duration > 0:
                     moisture_reduced_zones.append(zone)
 
-        # Send moisture notifications only once per calendar day
-        today_str = dt_util.now().strftime("%Y-%m-%d")
-        if (moisture_skipped_zones or moisture_reduced_zones) and self._moisture_notified_date != today_str:
-            self._moisture_notified_date = today_str
-            for zone in moisture_skipped_zones:
-                await self._send_pushover_notification(
-                    self._txt("title_moisture_skip"),
-                    self._txt(
-                        "moisture_skip_message",
-                        zone=zone.name,
-                        moisture=zone.current_moisture,
-                        target_max=zone.target_moisture_max,
-                    ),
-                )
-            for zone in moisture_reduced_zones:
-                await self._send_pushover_notification(
-                    self._txt("title_moisture_reduced"),
-                    self._txt(
-                        "moisture_reduced_message",
-                        zone=zone.name,
-                        moisture=zone.current_moisture,
-                        target_min=zone.target_moisture_min,
-                        target_max=zone.target_moisture_max,
-                        reduction=(1.0 - zone.moisture_reduction) * 100,
-                    ),
-                )
-        
         # If all zones ended up with 0 duration → nothing to water
         if total_duration == 0:
             self.scheduled_run = None
@@ -1083,15 +1053,6 @@ class SmartIrrigationCoordinator(DataUpdateCoordinator):
                     target_max=zone.target_moisture_max,
                 )
                 zone.current_moisture = current
-                await self._send_pushover_notification(
-                    self._txt("title_moisture_skip"),
-                    self._txt(
-                        "moisture_skip_message",
-                        zone=zone.name,
-                        moisture=current,
-                        target_max=zone.target_moisture_max,
-                    ),
-                )
                 return
         
         zone.is_running = True

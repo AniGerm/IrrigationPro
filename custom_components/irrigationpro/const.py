@@ -3,7 +3,7 @@ from typing import Final
 
 # Integration domain
 DOMAIN: Final = "irrigationpro"
-VERSION: Final = "2.2.4"
+VERSION: Final = "2.2.5"
 
 # Configuration
 CONF_WEATHER_ENTITY: Final = "weather_entity"

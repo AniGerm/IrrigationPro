@@ -5,6 +5,15 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.5] - 2026-04-05
+
+### Behoben
+- **Pushover-Spam endgültig behoben:** Einzelne Feuchtigkeits-Pushover-Nachrichten pro Zone bei der stündlichen Neuberechnung komplett entfernt. Die Information wird stattdessen im täglichen Morgenreport übermittelt (Zonen mit Skip-Grund: ⏭ Zone: Bodenfeuchte zu hoch …)
+- Safety-Net in `_water_zone()` loggt weiterhin den Skip, sendet aber keine separate Push-Nachricht mehr
+
+### Geändert
+- Manifest-Version auf 2.2.5 angehoben
+
 ## [2.2.4] - 2026-04-05
 
 ### Behoben
