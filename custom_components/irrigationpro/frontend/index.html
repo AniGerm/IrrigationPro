@@ -1243,8 +1243,8 @@
         'tip.zone_plant_density': 'Bedeckungsgrad der Fläche durch Pflanzen.\n1,0 = vollständig bedeckt\n0,5 = lückig (50 % Boden sichtbar)\n1,2–1,5 = sehr dicht / überlappend\n\n🌿 Dichter Rasen:     1,0\n🥬 Gemüsebeet:        0,8–1,1\n🌸 Junge Sträucher:   0,5–0,7\n🌳 Strauchbeet:       0,6–1,0',
         'tip.zone_exposure_factor': 'Lagefaktor für Sonnen- und Windexposition.\n\n☀️🌬 Vollsonne + Wind:      1,2–1,4\n☀️  Vollsonne, windstill:   1,0–1,1\n🌤  Halbschatten:           0,8–0,9\n🌳  Vollschatten:           0,6–0,7',
         'tip.zone_area': 'Bewässerte Fläche in m².\nGrundlage für die Berechnung des absoluten Wasserbedarfs in Liter.\nFormel: ETo × Kc × Dichte × Exposition × Fläche = benötigte Liter',
-        'tip.zone_flow_rate': 'Durchfluss pro einzelnem Emitter in Liter/Stunde.\nSteht auf dem Emitter oder im Datenblatt.\n\n💧 Tropfer:      1–4 L/h\n🌿 Micro-Spray:  30–80 L/h\n🌧 Sprenger:    100–300 L/h\n\nGesamtfluss = Durchfluss × Anzahl Emitter',
-        'tip.zone_emitter_count': 'Anzahl Emitter (Tropfer / Sprenger) in dieser Zone.\nGesamtfluss = Durchfluss [L/h] × Anzahl\n\nBeispiel: 4 Sprenger × 210 L/h = 840 L/h Gesamtfluss',
+        'tip.zone_flow_rate': 'Durchfluss pro einzelnem Emitter/Sprinkler in Liter/Stunde.\nSteht auf dem Emitter oder im Datenblatt.\n\n💧 Tropfer:          1–4 L/h\n🌿 Micro-Spray:     30–80 L/h\n🌧 MP-Rotator:     100–300 L/h\n💦 Getrieberegner: 500–1500 L/h\n🚿 Versenkregner: 800–2500 L/h\n\nGesamtfluss = Durchfluss × Anzahl',
+        'tip.zone_emitter_count': 'Anzahl Emitter / Sprinkler in dieser Zone.\nGesamtfluss = Durchfluss [L/h] × Anzahl\n\nBeispiel: 3 Getrieberegner × 800 L/h = 2400 L/h Gesamtfluss',
         'tip.zone_rain_threshold': 'Regenschwelle in mm.\nÜberschreitet der akkumulierte Regen diesen Wert, wird die Zone übersprungen.\n\n💡 Empfehlung:\n  2–4 mm: Rasen, Gemüse\n  4–6 mm: Ziersträucher\n  6–10 mm: Hecken, robuste Gehölze',
         'tip.zone_max_duration': 'Max. Laufdauer pro Zyklus in Minuten.\nIrrigationPro teilt die Gesamtdauer auf mehrere Zyklen auf (Cycle & Soak) –\ndamit Wasser zwischendurch einziehen kann.\n\n💡 Empfehlung:\n  10–20 min: Steile Lagen / Ton-Boden\n  20–30 min: Normaler Rasen\n  30–60 min: Tropfer, langsam versickernder Boden',
         'tip.zone_rain_factoring': 'Wenn aktiv: akkumulierter Regen wird vom berechneten Wasserbedarf abgezogen.\n\n✅ Aktiv: für normale Außenflächen (Wiese, Beet)\n❌ Inaktiv: überdachte Bereiche, Gewächshaus, Balkon',
@@ -1476,8 +1476,8 @@
         'tip.zone_plant_density': 'Plant coverage of the area.\n1.0 = fully covered\n0.5 = sparse (50% bare soil)\n1.2–1.5 = very dense / overlapping\n\n🌿 Dense lawn:         1.0\n🥬 Vegetable bed:      0.8–1.1\n🌸 Young shrubs:       0.5–0.7\n🌳 Shrub border:       0.6–1.0',
         'tip.zone_exposure_factor': 'Location factor for sun and wind exposure.\n\n☀️🌬 Full sun + wind:      1.2–1.4\n☀️  Full sun, sheltered:   1.0–1.1\n🌤  Part shade:            0.8–0.9\n🌳  Full shade:            0.6–0.7',
         'tip.zone_area': 'Irrigated area in m².\nUsed to calculate the absolute water demand in litres.\nFormula: ETo × Kc × density × exposure × area = litres needed',
-        'tip.zone_flow_rate': 'Flow rate per individual emitter in litres/hour.\nUsually printed on the emitter or in its datasheet.\n\n💧 Drip emitter:   1–4 L/h\n🌿 Micro-spray:    30–80 L/h\n🌧 Sprinkler:     100–300 L/h\n\nTotal flow = flow rate × emitter count',
-        'tip.zone_emitter_count': 'Number of emitters (drippers / sprinklers) in this zone.\nTotal flow = flow rate [L/h] × count\n\nExample: 4 sprinklers × 210 L/h = 840 L/h total flow',
+        'tip.zone_flow_rate': 'Flow rate per individual emitter/sprinkler in litres/hour.\nUsually printed on the emitter or in its datasheet.\n\n💧 Drip emitter:     1–4 L/h\n🌿 Micro-spray:     30–80 L/h\n🌧 MP Rotator:     100–300 L/h\n💦 Rotor sprinkler: 500–1500 L/h\n🚿 Pop-up spray:   800–2500 L/h\n\nTotal flow = flow rate × emitter count',
+        'tip.zone_emitter_count': 'Number of emitters / sprinklers in this zone.\nTotal flow = flow rate [L/h] × count\n\nExample: 3 rotor sprinklers × 800 L/h = 2400 L/h total flow',
         'tip.zone_rain_threshold': 'Rain threshold in mm.\nIf accumulated rainfall since the last run exceeds this value, the zone is skipped.\n\n💡 Recommendation:\n  2–4 mm: Lawn, vegetables\n  4–6 mm: Ornamental shrubs\n  6–10 mm: Hedges, hardy plants',
         'tip.zone_max_duration': 'Maximum run time per cycle in minutes.\nIrrigationPro splits the total duration across multiple cycles (cycle & soak)\nso water can soak in between.\n\n💡 Recommendation:\n  10–20 min: Steep slopes / clay soils\n  20–30 min: Standard lawn\n  30–60 min: Drip / slow-draining soils',
         'tip.zone_rain_factoring': 'When enabled: accumulated rain is subtracted from the water demand.\n\n✅ Enabled: for normal outdoor areas (lawn, beds)\n❌ Disabled: covered areas, greenhouse, balcony plants',
@@ -1595,7 +1595,7 @@
       }
     };
 
-    const UI_VERSION = '2.2.5';
+    const UI_VERSION = '2.2.6';
     let lang = localStorage.getItem('irrigationpro_lang') || 'de';
 
     function t(key, vars) {

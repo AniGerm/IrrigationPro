@@ -5,6 +5,19 @@ Alle wesentlichen Änderungen an diesem Projekt werden in dieser Datei dokumenti
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.6] - 2026-04-09
+
+### Behoben
+- **Flow-Rate Obergrenze erhöht:** Config-Flow erlaubt jetzt bis 3000 L/h statt max. 100 — notwendig für Getrieberegner (500–1500 L/h) und Versenkregner (800–2500 L/h)
+
+### Verbessert
+- Labels in Config-Flow klarer formuliert: „Durchfluss pro Emitter/Sprinkler" statt nur „Emitter-Durchfluss"
+- Tooltips im Frontend erweitert mit realistischen Bereichen für alle Sprinkler-Typen (MP-Rotator, Getrieberegner, Versenkregner)
+- Beispielrechnung in Tooltips aktualisiert (3 Getrieberegner × 800 L/h = 2400 L/h)
+
+### Geändert
+- Manifest-Version auf 2.2.6 angehoben
+
 ## [2.2.5] - 2026-04-05
 
 ### Behoben

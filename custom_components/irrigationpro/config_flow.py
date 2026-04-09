@@ -242,7 +242,7 @@ class SmartIrrigationConfigFlow(config_entries.ConfigFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.1,
-                        max=100,
+                        max=3000,
                         step=0.1,
                         unit_of_measurement="L/h",
                         mode=selector.NumberSelectorMode.BOX,
